@@ -1,0 +1,41 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# This is a target, but it's not selectable by the user. These are the commands
+# that get executed at the very end of the generated prepare.sh.
+# These commands are not optional and are automatically added to targets.
+
+REQUIRES=''
+DESCRIPTION=''
+HOSTBIN='enter-chroot delete-chroot mount-chroot unmount-chroot'
+. "${TARGETSDIR:="$PWD"}/common"
+
+### Append to prepare.sh:
+# Set the timezone
+if [ ! -f /etc/timezone ] || grep -qi '^etc' /etc/timezone; then
+    dpkg-reconfigure tzdata
+fi
+
+# Add the primary user
+if ! grep -q ":1000:" /etc/passwd; then
+    while ! echo "$username" | grep -q '^[a-z][-a-z0-9_]*$'; do
+        if [ -n "$username" ]; then
+            echo 'Username must be lowercase letters, numbers, or dashes.' 1>&2
+        fi
+        echo -n 'Please specify a username for the primary user: ' 1>&2
+        read username junk
+    done
+    adduser "$username"
+fi
+
+echo 'Cleaning up' 1>&2
+apt-get clean
+rm -f "$0"
+
+if [ -n "$TIPS" ]; then
+    echo "
+Here's some tips:
+$TIPS" 1>&2
+fi

@@ -1,0 +1,297 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+APPLICATION="${0##*/}"
+CHROOTS="`readlink -f "\`dirname "$0"\`/../chroots"`"
+CREATE=''
+ENCRYPT=''
+KEYFILE=''
+PRINT=''
+
+USAGE="$APPLICATION [options] name [...]
+
+Mounts one or more encrypted chroots into a root-only directory.
+
+Options:
+    -c CHROOTS  Directory the chroots are in. Default: $CHROOTS
+    -e          If the chroot is not encrypted, encrypt it.
+    -k KEYFILE  File or directory to store the (encrypted) encryption keys in.
+                If unspecified, the keys will be stored in the chroot if doing a
+                first encryption, or auto-detected on existing chroots.
+    -n          Create the chroot if it doesn't exist.
+    -p          Prints out the path to the mounted directory on stdout."
+
+# Function to exit with exit code $1, spitting out message $@ to stderr
+error() {
+    local ecode="$1"
+    shift
+    echo "$*" 1>&2
+    exit "$ecode"
+}
+
+# Process arguments
+while getopts 'c:ek:np' f; do
+    case "$f" in
+    c) CHROOTS="`readlink -f "$OPTARG"`";;
+    e) ENCRYPT='y';;
+    k) KEYFILE="$OPTARG";;
+    n) CREATE='y';;
+    p) PRINT='y';;
+    \?) error 2 "$USAGE";;
+    esac
+done
+shift "$((OPTIND-1))"
+
+# Need at least one chroot listed
+if [ $# = 0 ]; then
+    error 2 "$USAGE"
+fi
+
+# We need to run as root
+if [ ! "$USER" = root -a ! "$UID" = 0 ]; then
+    error 2 "$APPLICATION must be run as root."
+fi
+
+# Make sure we always exit with echo on the tty.
+TRAP="stty echo 2>/dev/null || true;$TRAP"
+trap "$TRAP" INT HUP 0
+
+# Mount each chroot
+for NAME in "$@"; do
+    if [ -z "$NAME" ]; then
+        continue
+    fi
+
+    # Check for existence
+    CHROOT="$CHROOTS/$NAME"
+    movesrc=''
+    if [ -d "$CHROOT" ]; then
+        if [ ! -f "$CHROOT/.ecryptfs" -a -z "$ENCRYPT" ]; then
+            if [ -n "$PRINT" ]; then
+                echo "$CHROOT"
+            fi
+            continue
+        fi
+        # Check for non-encrypted files, which means we may need to move them.
+        for file in "$CHROOT/"*; do
+            if [ "${file#*/ECRYPTFS_FNEK_ENCRYPTED}" = "$file" ]; then
+                movesrc="$CHROOT"
+                break
+            fi
+        done
+    elif [ -z "$CREATE" ]; then
+        error 1 "$CHROOT not found."
+    elif [ -z "$ENCRYPT" ]; then
+        mkdir -p "$CHROOT"
+        if [ -n "$PRINT" ]; then
+            echo "$CHROOT"
+        fi
+        continue
+    fi
+
+    CHROOTSRC="$CHROOT"
+    CHROOT="$CHROOTS/.secure/$NAME"
+    mkdir -p "$CHROOTSRC"
+    if [ -n "$PRINT" ]; then
+        echo "$CHROOT"
+    fi
+
+    # Check if we actually need to mount
+    if ! mountpoint -q "$CHROOT"; then
+        # We must be on a terminal.
+        if ! tty -s; then
+            error 2 'STDIN is not a terminal; cannot request passwords.'
+        fi
+
+        # Ensure that there's a root password set before decrypting the chroot
+        if [ ! -f '/mnt/stateful_partition/etc/devmode.passwd' ]; then
+            echo 'You must have a root password in ChromeOS to mount encrypted chroots.' 1>&2
+            chromeos-setdevpasswd
+        fi
+
+        # Detect the key file
+        if [ -z "$KEYFILE" ]; then
+            KEYFILE="$CHROOTSRC/.ecryptfs"
+            if [ -f "$KEYFILE" ]; then
+                header="`head -n1 "$KEYFILE"`"
+                if [ -n "$header" ]; then
+                    KEYFILE="$header"
+                fi
+            fi
+        elif [ "${KEYFILE#/}" = "$KEYFILE" ]; then
+            KEYFILE="$PWD/$KEYFILE"
+        fi
+        if [ -d "$KEYFILE" -o ! "${KEYFILE%/}" = "$KEYFILE" ]; then
+            KEYFILE="${KEYFILE%/}/$NAME"
+        fi
+        if ! mkdir -p "`dirname "$KEYFILE"`"; then
+            error 1 "Unable to create directory for $KEYFILE"
+        fi
+
+        # Create a root-only mount directory and mount in there
+        mkdir -m 700 -p "$CHROOT"
+        chown root:root "$CHROOTS/.secure"
+        chmod 700 "$CHROOTS/.secure"
+
+        # If we just created it, choose and create the keyfile.
+        passphrase=''
+        if [ ! -f "$CHROOTSRC/.ecryptfs" ]; then
+            if [ -e "$KEYFILE" ]; then
+                error 1 "Encryption key file $KEYFILE already exists. Refusing to overwrite!"
+            fi
+            echo -n "Choose an encryption passphrase for $NAME: " 1>&2
+            stty -echo
+            while [ -z "$passphrase" ]; do
+                read passphrase
+                if [ -z "$passphrase" ]; then
+                    echo 1>&2
+                    echo -n 'You must specify a passphrase: ' 1>&2
+                    continue
+                fi
+                echo 1>&2
+                echo -n 'Please confirm your passphrase: ' 1>&2
+                read confirmation
+                if [ ! "$confirmation" = "$passphrase" ]; then
+                    passphrase=''
+                    echo 1>&2
+                    echo -n 'Passphrases do not match; try again: ' 1>&2
+                fi
+                confirmation=''
+            done
+            stty echo
+            echo 1>&2
+
+            echo -n 'Generating keys (move the mouse to generate entropy)...' 1>&2
+            key="`hexdump -v -n32 -e'"%02x"' /dev/random`"
+            fnek="`hexdump -v -n32 -e'"%02x"' /dev/random`"
+            echo 'done' 1>&2
+
+            # Create key file
+            wrappedkey="`mktemp`"
+            wrappedfnek="`mktemp`"
+            TRAP="rm -f '$wrappedkey' '$wrappedfnek';$TRAP"
+            trap "$TRAP" INT HUP 0
+            echo -n "$key
+$passphrase" | ecryptfs-wrap-passphrase "$wrappedkey" -
+            echo -n "$fnek
+$passphrase" | ecryptfs-wrap-passphrase "$wrappedfnek" -
+            unset key fnek
+            echo | cat - "$wrappedkey" "$wrappedfnek" > "$KEYFILE"
+            if [ ! -f "$CHROOTSRC/.ecryptfs" ]; then
+                echo "$KEYFILE" > "$CHROOTSRC/.ecryptfs"
+            fi
+        elif [ ! -f "$KEYFILE" ]; then
+            error 1 "Unable to find encryption key file $KEYFILE"
+        else
+            echo -n "Enter encryption passphrase for $NAME: " 1>&2
+            stty -echo
+            read passphrase
+            stty echo
+            echo 1>&2
+
+            wrappedkey="`mktemp`"
+            wrappedfnek="`mktemp`"
+            TRAP="rm -f '$wrappedkey' '$wrappedfnek';$TRAP"
+            trap "$TRAP" INT HUP 0
+
+            # Extract wrapped keys from keyfile
+            tail -c 160 "$KEYFILE" | head -c 80 > "$wrappedkey"
+            tail -c 80 "$KEYFILE" > "$wrappedfnek"
+        fi
+
+        # Add keys to keychain and extract 
+        keysig="`echo -n "$passphrase" \
+            | ecryptfs-unwrap-passphrase "$wrappedkey" - \
+            | ecryptfs-add-passphrase - \
+            | sed 's/.*\[\(.*\)\].*/\1/'`"
+        fneksig="`echo -n "$passphrase" \
+            | ecryptfs-unwrap-passphrase "$wrappedfnek" - \
+            | ecryptfs-add-passphrase - \
+            | sed 's/.*\[\(.*\)\].*/\1/'`"
+        if [ -z "$keysig" -o -z "$fneksig" ]; then
+            error 1 "Failed to decrypt $NAME."
+        fi
+
+        mnt="ecryptfs_sig=$keysig,ecryptfs_fnek_sig=$fneksig"
+        mnt="$mnt,no_sig_cache,ecryptfs_cipher=aes,ecryptfs_key_bytes=16"
+        mnt="$mnt,ecryptfs_passthrough=n,ecryptfs_unlink_sigs"
+
+        if ! mount -i -t ecryptfs -o "$mnt" "$CHROOTSRC" "$CHROOT"; then
+            error 1 "Failed to mount $NAME."
+        fi
+        mount --make-unbindable "$CHROOT"
+    fi
+
+    # Perform the move
+    if [ -z "$movesrc" ]; then
+        continue
+    fi
+    response=y
+    for file in "$movesrc/"*; do
+        if [ ! "${file#*/ECRYPTFS_FNEK_ENCRYPTED}" = "$file" ]; then
+            echo -n \
+"About to continue encrypting the unencrypted portion of $NAME.
+If this is unexpected, then it could mean that someone's trying to inject files
+into your encrypted chroot, potentially allowing them to steal your data.
+Please choose one of the following options:
+yes  -- You are sure you want to continue moving the files in. They're yours.
+del  -- You do not like these files and want them deleted permanently.
+list -- You do not know what these files are and want to list them.
+no   -- You don't want to decide one way or another quite yet.
+> " 1>&2
+            read response
+            break
+        fi
+    done
+    case "$response" in
+    y*|Y*) (
+        echo -n "Encrypting $NAME; please wait..." 1>&2
+        cd "$movesrc"
+        tmp="`mktemp -d --tmpdir=. 'ECRYPTFS_MOVE_STAGING_XXXXXX'`"
+        find -not -name 'ECRYPTFS_FNEK_ENCRYPTED*' \
+             -not -wholename './ECRYPTFS_MOVE_STAGING_*' \
+             -not -wholename '.' \
+             -not -wholename './.ecryptfs' \
+             -exec mkdir -p "$tmp/{}" ';' \
+             -exec rmdir "$tmp/{}" ';' \
+             '(' -prune , -exec mv -f '{}' "$tmp/{}" ';' ')' 1>&2
+        for tmp in ECRYPTFS_MOVE_STAGING_*; do
+            (
+                cd "$tmp"
+                find '!' '(' -type d -exec test -d "$CHROOT/{}" ';' ')' \
+                     '(' -prune , -exec mv -f '{}' "$CHROOT/{}" ';' ')' \
+                     -exec echo -n . ';' 1>&2
+                find -depth -type d -not -wholename . \
+                     -exec test -d "$CHROOT/{}" ';' \
+                     -exec rmdir '{}' ';' 1>&2
+            )
+            rmdir "$tmp" 2>/dev/null || true
+        done
+        echo 'done.' 1>&2
+    );;
+    d*|D*) (
+        echo "Deleting unencrypted files in $NAME; please wait..." 1>&2
+        cd "$movesrc"
+        find -not -name 'ECRYPTFS_FNEK_ENCRYPTED*' \
+             -not -wholename '.' \
+             -not -wholename './.ecryptfs' \
+             '(' -prune , -exec rm -rvf '{}' ';' ')' 1>&2
+        echo 'Done.' 1>&2
+    );;
+    l*|L*) (
+        echo "Listing unencrypted files in $NAME; please wait..." 1>&2
+        cd "$movesrc"
+        find -not -name 'ECRYPTFS_FNEK_ENCRYPTED*' \
+             -not -name 'ECRYPTFS_MOVE_STAGING_*' \
+             -not -wholename '.' \
+             -not -wholename './.ecryptfs' \
+             -print -prune 1>&2
+        echo 'Done.' 1>&2
+        exit 2
+    );;
+    esac
+done
+
+exit 0

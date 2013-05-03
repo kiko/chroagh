@@ -1,0 +1,22 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+if [ ! "$TARGETS" = 'help' -a ! "${ARCH#arm}" = "$ARCH" \
+     -a ! "$RELEASE" = 'precise' ]; then
+    echo "unity target does not work in xephyr in $RELEASE due to missing egl support." 1>&2
+    exit 1
+fi
+REQUIRES='chromium gtk-extra'
+DESCRIPTION='Installs the Unity desktop environment. (Approx. 700MB)'
+HOSTBIN='startunity'
+CHROOTBIN='startunity'
+. "${TARGETSDIR:="$PWD"}/common"
+
+### Append to prepare.sh:
+apt-get -y install unity unity-2d light-themes \
+                   `noauto network-manager brasero firefox`
+
+TIPS="$TIPS
+You can start Unity via the startunity host command: sudo startunity
+"
