@@ -1,0 +1,38 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+REQUIRES='core'
+DESCRIPTION='Nested X11 install. Replaces X11 if specified first.'
+CHROOTBIN='croutonpowerd croutonwheel croutonwm xinit'
+CHROOTETC='keylaunchrc-xephyr'
+# Prevent X11 from being added if it hasn't already.
+echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
+. "${TARGETSDIR:="$PWD"}/common"
+
+### Append to prepare.sh:
+pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput --needed
+
+aurcompile keylaunch
+
+# Add a host Xauthority sentinel file
+hostxauth='/etc/X11/host-Xauthority'
+touch "$hostxauth"
+chmod 444 "$hostxauth"
+
+# Modify xserverrc
+echo '#!/bin/sh -e
+if [ -r "'"$hostxauth"'" ]; then
+	export DISPLAY=":0" XAUTHORITY="'"$hostxauth"'"
+	exec /usr/bin/Xephyr -fullscreen -host-cursor -nolisten tcp "$@"
+else
+	exec /usr/bin/X -nolisten tcp "$@"
+fi
+' > /etc/X11/xinit/xserverrc
+
+TIPS="$TIPS
+You can flip through your running chroot desktops and Chromium OS by hitting
+Ctrl+Alt+Shift+Back and Ctrl+Alt+Shift+Forward.
+"
+
+### append x11-common

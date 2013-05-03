@@ -1,9 +1,11 @@
-#!/bin/sh -e
+#!/bin/bash -e
 # Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 APPLICATION="${0##*/}"
+SCRIPTDIR="${SCRIPTDIR:-"`dirname "$0"`/.."}"
+INSTALLERDIR="$SCRIPTDIR/installer"
 
 USAGE="$APPLICATION distribution [options]
 
@@ -12,7 +14,7 @@ Constructs a chroot for running alongside Chromium OS.
 Run
 # $APPLICATION ubuntu
 or
-# $APPLICATION archlinux
+# $APPLICATION arch
 for distribution specific options.
 "
 
@@ -27,13 +29,13 @@ error() {
 OS=$1
 
 # If OS isn't specified, we should just print help text.
-if [ -z "$OS" ]; then
+if [ -z "$INSTALLERDIR/$OS" ]; then
     error 2 "$USAGE"
 fi
 
-if [ ! -x "$OS/main.sh" ]; then
-    error 2 "$OS/main.sh does not exists."
+if [ ! -x "$INSTALLERDIR/$OS/main.sh" ]; then
+    error 2 "$INSTALLERDIR/$OS/main.sh does not exists."
 fi
 
-$OS/main.sh ${*:2}
+$INSTALLERDIR/$OS/main.sh ${*:2}
 
