@@ -11,9 +11,14 @@ echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
 . "${TARGETSDIR:="$PWD"}/common"
 
 ### Append to prepare.sh:
+#FIXME: Missing dmz-cursor-theme
 pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput --needed
 
 aurcompile keylaunch
+
+# Compile croutoncursor
+compile cursor '-lX11 -lXfixes -lXrender' \
+    libx11 libxfixes libxrender
 
 # Add a host Xauthority sentinel file
 hostxauth='/etc/X11/host-Xauthority'
