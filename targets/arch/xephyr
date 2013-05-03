@@ -11,6 +11,9 @@ echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
 . "${TARGETSDIR:="$PWD"}/common"
 
 ### Append to prepare.sh:
+# Needed for croutonwheel to work
+aurcompile mawk
+
 #FIXME: Missing dmz-cursor-theme
 pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput --needed
 
