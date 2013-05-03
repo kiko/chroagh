@@ -1,0 +1,18 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+REQUIRES='x11'
+DESCRIPTION='Installs the Xfce desktop environment. (Approx. 250MB)'
+HOSTBIN='startxfce4'
+. "${TARGETSDIR:="$PWD"}/common"
+
+### Append to prepare.sh:
+
+#FIXME: ttf-freefont is fine, but are there better looking fonts?
+pacman -S xfce4 xfce4-goodies ttf-freefont --needed
+
+#FIXME
+TIPS="$TIPS
+You can start Xfce via the startxfce4 host command: sudo startxfce4 (THIS SEEMS BROKEN NOW)
+"

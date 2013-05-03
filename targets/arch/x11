@@ -1,0 +1,14 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+if [ ! "$TARGETS" = 'help' -a ! "${ARCH#arm}" = "$ARCH" ]; then
+    echo 'x11 target does not work on ARM. Substituting in xephyr.' 1>&2
+    TARGET=xephyr
+    . "${TARGETSDIR:="$PWD"}/$TARGET"
+fi
+
+echo "x11 target has not been coded on non-ARM architecture for Arch Linux" 1>&2
+exit 2
+
+### append x11-common

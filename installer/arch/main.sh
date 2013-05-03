@@ -7,22 +7,19 @@ APPLICATION="${0##*/}"
 SCRIPTDIR="${SCRIPTDIR:-"`dirname "$0"`/../.."}"
 CHROOTBINDIR="$SCRIPTDIR/chroot-bin"
 CHROOTETCDIR="$SCRIPTDIR/chroot-etc"
-INSTALLERDIR="$SCRIPTDIR/installer/ubuntu"
+INSTALLERDIR="$SCRIPTDIR/installer/arch"
 HOSTBINDIR="$SCRIPTDIR/host-bin"
-TARGETSDIR="$SCRIPTDIR/targets"
+TARGETSDIR="$SCRIPTDIR/targets/arch"
 SRCDIR="$SCRIPTDIR/src"
 
-ARCH="`uname -m | sed -e 's i.86 i386 ;s x86_64 amd64 ;s arm.* armhf ;'`"
+ARCH="`uname -m`"
 DOWNLOADONLY=''
 ENCRYPT=''
 KEYFILE=''
-MIRROR=''
-MIRROR86='http://archive.ubuntu.com/ubuntu/'
-MIRRORARM='http://ports.ubuntu.com/ubuntu-ports/'
+MIRROR='unspecified'
 NAME=''
 PREFIX='/usr/local'
 PROXY='unspecified'
-RELEASE='precise'
 TARBALL=''
 TARGETS=''
 TARGETFILE=''
@@ -31,7 +28,9 @@ UPDATE=''
 USAGE="$APPLICATION [options] -t targets
 $APPLICATION [options] -d -f tarball
 
-Constructs a Debian-based chroot for running alongside Chromium OS.
+Constructs a Archlinux-based chroot for running alongside Chromium OS.
+
+Only ARM architecture is suppported/tested at this time (Samsung Chromebook ARM).
 
 If run with -f, a tarball is used to bootstrap the chroot. If specified with -d,
 the tarball is created for later use with -f.
@@ -45,21 +44,17 @@ Options:
     -a ARCH     The architecture to prepare the chroot for. Default: $ARCH
     -d          Downloads the bootstrap tarball but does not prepare the chroot.
     -e          Encrypt the chroot with ecryptfs using a passphrase.
-                If specified twice, prompt to change the encryption passphrase.
     -f TARBALL  The tarball to use, or download to in the case of -d.
                 When using a prebuilt tarball, -a and -r are ignored.
     -k KEYFILE  File or directory to store the (encrypted) encryption keys in.
                 If unspecified, the keys will be stored in the chroot if doing a
                 first encryption, or auto-detected on existing chroots.
-    -m MIRROR   Mirror to use for bootstrapping and apt-get.
-                Default for i386/amd64: $MIRROR86
-                Default for armhl/others: $MIRRORARM
-    -n NAME     Name of the chroot. Default is the release name.
+    -m MIRROR   Mirror to use for pacman.
+    -n NAME     Name of the chroot. Default is \"alarm\".
     -p PREFIX   The root directory in which to install the bin and chroot
                 subdirectories and data. Default: $PREFIX
     -P PROXY    Set an HTTP proxy for the chroot; effectively sets http_proxy.
                 Specify an empty string to remove a proxy when updating.
-    -r RELEASE  Name of the distribution release. Default: $RELEASE
     -t TARGETS  Comma-separated list of environment targets to install.
                 Specify help to print out potential targets.
     -T TARGETFILE  Path to a custom target definition file that gets applied to
@@ -85,18 +80,17 @@ error() {
 }
 
 # Process arguments
-while getopts 'a:def:k:m:n:p:P:r:s:t:T:uV' f; do
+while getopts 'a:def:k:m:n:p:P:s:t:T:uV' f; do
     case "$f" in
     a) ARCH="$OPTARG";;
     d) DOWNLOADONLY='y';;
-    e) ENCRYPT="${ENCRYPT:-"-"}e";;
+    e) ENCRYPT='-e';;
     f) TARBALL="$OPTARG";;
     k) KEYFILE="$OPTARG";;
     m) MIRROR="$OPTARG";;
     n) NAME="$OPTARG";;
     p) PREFIX="`readlink -f "$OPTARG"`";;
     P) PROXY="$OPTARG";;
-    r) RELEASE="$OPTARG";;
     t) TARGETS="$TARGETS${TARGETS:+","}$OPTARG";;
     T) TARGETFILE="$OPTARG";;
     u) UPDATE="$((UPDATE+1))";;
@@ -106,6 +100,10 @@ while getopts 'a:def:k:m:n:p:P:r:s:t:T:uV' f; do
 done
 shift "$((OPTIND-1))"
 
+if [ ! "$ARCH" = "armv7l" ]; then
+    error 2 "Only ARM architecture is supported (armv7l)"
+fi
+
 # If targets weren't specified, we should just print help text.
 if [ -z "$DOWNLOADONLY" -a -z "$TARGETS" -a -z "$TARGETFILE" ]; then
     error 2 "$USAGE"
@@ -114,15 +112,6 @@ fi
 # There should never be any extra parameters.
 if [ ! $# = 0 ]; then
     error 2 "$USAGE"
-fi
-
-# If MIRROR wasn't specified, choose it based on ARCH.
-if [ -z "$MIRROR" ]; then
-    if [ "$ARCH" = 'amd64' -o "$ARCH" = 'i386' ]; then
-        MIRROR="$MIRROR86"
-    else
-        MIRROR="$MIRRORARM"
-    fi
 fi
 
 # Confirm or list targets if requested (and download only isn't chosen)
@@ -189,22 +178,6 @@ VT, you're gonna have a bad time. Press Ctrl-C at any point to abort." 1>&2
     sleep 5
 fi
 
-# If we specified a tarball, we need to detect the ARCH and RELEASE
-if [ -z "$DOWNLOADONLY" -a -n "$TARBALL" ]; then
-    if [ ! -f "$TARBALL" ]; then
-        error 2 "$TARBALL not found."
-    fi
-    echo 'Detecting archive release and architecture...' 1>&2
-    releasearch="`tar -tf "$TARBALL" 2>/dev/null | head -n 1`"
-    releasearch="${releasearch%%/*}"
-    if [ ! "${releasearch#*-}" = "$releasearch" ]; then
-        ARCH="${releasearch#*-}"
-        RELEASE="${releasearch%-*}"
-    else
-        echo 'Unable to detect archive release and architecture. Using flags.' 1>&2
-    fi
-fi
-
 # Set http_proxy if a proxy is specified.
 if [ ! "$PROXY" = 'unspecified' ]; then
     export http_proxy="$PROXY" https_proxy="$PROXY" ftp_proxy="$PROXY"
@@ -218,7 +191,7 @@ trap "$TRAP" INT HUP 0
 # Deterime directories, and fix NAME if it was not specified.
 BIN="$PREFIX/bin"
 CHROOTS="$PREFIX/chroots"
-CHROOT="$CHROOTS/${NAME:="$RELEASE"}"
+CHROOT="$CHROOTS/${NAME:=alarm}"
 
 # Confirm we have write access to the directory before starting.
 NODOWNLOAD=''
@@ -252,13 +225,13 @@ Either delete it, specify a different name (-n), or specify -u to update it."
 
     # Sanity-check the release if we're updating
     if [ -n "$NODOWNLOAD" ] \
-            && ! grep -q "=$RELEASE\$" "$CHROOT/etc/lsb-release"; then
+            && ! grep -q "ID=archarm\$" "$CHROOT/etc/os-release" ; then
         if [ ! "$UPDATE" = 2 ]; then
             error 1 \
-"Release doesn't match! Please correct the -r option, or specify a second -u to
+"Chroot doesn't look like ArchLinux! Please correct the -r option, or specify a second -u to
 change the release, upgrading the chroot (dangerous)."
         else
-            echo "WARNING: Changing the chroot release to $RELEASE." 2>&1
+            echo "WARNING: Considering the chroot as ArchLinux..." 2>&1
             echo "Press Control-C to abort; upgrade will continue in 5 seconds." 1>&2
             sleep 5
         fi
@@ -302,80 +275,19 @@ fi
 
 # Unpack the tarball if appropriate
 if [ -z "$NODOWNLOAD" -a -z "$DOWNLOADONLY" ]; then
-    echo "Installing $RELEASE-$ARCH chroot to $CHROOT" 1>&2
+    echo "Installing provided chroot to $CHROOT" 1>&2
     if [ -n "$TARBALL" ]; then
         # Unpack the chroot
         echo 'Unpacking chroot environment...' 1>&2
         tar -C "$CHROOT" --strip-components=1 -xf "$TARBALL"
     fi
 elif [ -z "$NODOWNLOAD" ]; then
-    echo "Downloading $RELEASE-$ARCH bootstrap to $TARBALL" 1>&2
+    echo "Downloading bootstrap to $TARBALL" 1>&2
 fi
 
 # Download the bootstrap data if appropriate
 if [ -z "$NODOWNLOAD" ] && [ -n "$DOWNLOADONLY" -o -z "$TARBALL" ]; then
-    # Create the temporary directory and delete it upon exit
-    tmp="`mktemp -d --tmpdir=/tmp "$APPLICATION.XXX"`"
-    subdir="$RELEASE-$ARCH"
-    TRAP="rm -rf '$tmp';$TRAP"
-    trap "$TRAP" INT HUP 0
-
-    # Ensure that the temporary directory has exec+dev, or mount a new tmpfs
-    if [ "$NOEXECTMP" = 'y' ]; then
-        mount -i -t tmpfs -o 'rw,dev,exec' tmpfs "$tmp"
-        TRAP="umount -f '$tmp';$TRAP"
-        trap "$TRAP" INT HUP 0
-    fi
-
-    # Grab the latest release of debootstrap
-    echo 'Downloading latest debootstrap...' 1>&2
-    d='http://anonscm.debian.org/gitweb/?p=d-i/debootstrap.git;a=snapshot;h=HEAD;sf=tgz'
-    if ! wget -O- --no-verbose --timeout=60 -t2 "$d"  \
-            | tar -C "$tmp" --strip-components=1 -zx 2>/dev/null; then
-        echo 'Download from Debian gitweb failed. Trying latest release...' 1>&2
-        d='http://ftp.debian.org/debian/pool/main/d/debootstrap/'
-        f="`wget -O- --no-verbose --timeout=60 -t2 "$d" \
-                | sed -ne 's ^.*\(debootstrap_[0-9.]*.tar.gz\).*$ \1 p' \
-                | tail -n 1`"
-        if [ -z "$f" ]; then
-            error 1 'Failed to download debootstrap.
-Check your internet connection or proxy settings and try again.'
-        fi
-        v="${f#*_}"
-        v="${v%.tar.gz}"
-        echo "Downloading debootstrap version $v..." 1>&2
-        if ! wget -O- --no-verbose --timeout=60 -t2 "$d$f" \
-                | tar -C "$tmp" --strip-components=1 -zx 2>/dev/null; then
-            error 1 'Failed to download debootstrap.'
-        fi
-    fi
-
-    # Add the necessary debootstrap executables
-    newpath="$PATH:$tmp"
-    cp "$INSTALLERDIR/ar" "$INSTALLERDIR/pkgdetails" "$tmp/"
-    chmod 755 "$INSTALLERDIR/ar" "$INSTALLERDIR/pkgdetails" 
-
-    # debootstrap wants a file to initialize /dev with, but we don't actually
-    # want any files there. Create an empty tarball that it can extract.
-    tar -czf "$tmp/devices.tar.gz" -T /dev/null
-
-    # Grab the release and drop it into the subdirectory
-    echo 'Downloading bootstrap files...' 1>&2
-    PATH="$newpath" DEBOOTSTRAP_DIR="$tmp" $FAKEROOT \
-        "$tmp/debootstrap" --foreign --arch="$ARCH" "$RELEASE" \
-                           "$tmp/$subdir" "$MIRROR" 1>&2
-
-    # Tar it up if we're only downloading
-    if [ -n "$DOWNLOADONLY" ]; then
-        echo 'Compressing bootstrap files...' 1>&2
-        $FAKEROOT tar -C "$tmp" -cajf "$TARBALL" "$subdir"
-        echo 'Done!' 1>&2
-        exit 0
-    fi
-
-    # Move it to the right place
-    echo 'Moving bootstrap files into the chroot...' 1>&2
-    mv -f "$tmp/$subdir/"* "$CHROOT"
+	error 2 "Sorry, I cannot bootstrap Arch Linux. Please download a chroot and specifiy it with -f."
 fi
 
 # Ensure that /usr/local/bin and /etc/crouton exist
@@ -383,8 +295,7 @@ mkdir -p "$CHROOT/usr/local/bin" "$CHROOT/etc/crouton"
 
 # Create the setup script inside the chroot
 echo 'Preparing chroot environment...' 1>&2
-VAREXPAND="s #ARCH $ARCH ;s #MIRROR $MIRROR ;s #RELEASE $RELEASE ;"
-VAREXPAND="${VAREXPAND}s #PROXY $PROXY ;s #VERSION $VERSION ;"
+VAREXPAND="s #ARCH $ARCH ;s #MIRROR $MIRROR ;s #PROXY $PROXY ;s #VERSION $VERSION ;"
 sed -e "$VAREXPAND" "$INSTALLERDIR/prepare.sh" > "$CHROOT/prepare.sh"
 # Create a file for target deduplication
 TARGETDEDUPFILE="`mktemp --tmpdir=/tmp "$APPLICATION.XXX"`"
