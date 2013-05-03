@@ -203,7 +203,7 @@ fi
 ln -sf '/var/host/shill/resolv.conf' "$CHROOT/etc/resolv.conf"
 
 # Copy timezone information
-cp -f /etc/localtime "$CHROOT/etc/resolv.conf"
+cp -f /etc/localtime "$CHROOT/etc/localtime"
 
 # Follows and fixes dangerous symlinks, returning the canonicalized path.
 fixabslinks() {
