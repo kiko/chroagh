@@ -1,3 +1,99 @@
+chroagh: Chromium OS *-Linux Chroot Environment
+===============================================
+
+chroagh is a fork of [crouton](https://github.com/dnschneid/crouton), that
+allows you to run another Linux distribution side by side with Chromium OS.
+
+Currently Ubuntu is supported (on x86/ARM, provided I did not break anything
+from the original crouton script). Arch Linux ARM is also supported (Arch
+Linux for x86 could be supported with minimal effort).
+
+Usage
+-----
+
+These instructions assume you are using a Samsung Chromebook ARM, and that
+you want to install Arch Linux. If you want to install Ubuntu it is probably
+better to stick with the original crouton.
+
+### Switch your device to developer mode
+
+First, switch your Chromebook into developer mode (careful, this will erase
+all your data), see the instructions
+[here](http://www.chromium.org/chromium-os/developer-information-for-chrome-os-devices/samsung-arm-chromebook).
+It will take about 15 minutes. From then on, on each boot-up, you will need
+to press Ctrl+D.
+
+### Extract the rootfs
+
+For now, this needs to be done on a separate computer, as it requires 8GB
+of free space to extract the image (the image is meant to be written on 
+a SD card).
+
+  1. Download and extract the latest ArchLinux ARM image for the chromebook:
+
+        wget http://us.mirror.archlinuxarm.org/os/ArchLinuxARM-chromebook-latest.img.gz
+        gunzip ArchLinuxARM-chromebook-latest.img.gz
+
+  2. Mount the image:
+
+        sudo modprobe loop
+        sudo losetup /dev/loop0 ArchLinuxARM-chromebook-latest.img
+        mkdir rootfs
+        sudo mount /dev/loop0p3 rootfs
+
+  3. Create the rootfs tarball:
+
+        sudo tar pcvfz ArchLinuxARM-chromebook-latest-rootfs.tar.gz rootfs
+
+  4. Umount the image:
+
+        sudo umount rootfs
+        sudo losetup -d /dev/loop0
+
+Transfer `ArchLinuxARM-chromebook-latest-rootfs.tar.gz` to the Chromebook,
+for example using a USB key. Put it in the `Downloads` directory.
+
+### Create the chroot
+
+  1. Launch a crosh shell (Ctrl+Alt+T, you can paste in the console using
+     Ctrl+Shift+V), then enter `shell`.
+  2. Download and extract chroagh:
+
+        cd ~/Downloads
+        wget https://api.github.com/repos/drinkcat/chroagh/tarball -O chroagh.tar.gz
+        tar xvf chroagh.tar.gz
+        cd drinkcat-chroagh-*
+
+  3. Create the rootfs:
+
+        sudo bash -e installer/main.sh arch -t xfce -f ../ArchLinuxARM-chromebook-latest-rootfs.tar.gz
+
+     Follow the instructions (press enter anytime you are asked a yes/no
+     question). This will take a while, especially if your network is
+     slow.
+
+### Start the chroot
+
+  * `sudo enter-chroot` to launch a bash shell
+  * `sudo startxfce4` to start XFCE in a separate screen (you can switch
+    between screens with Ctrl+Alt+Shift+Back or Ctrl+Alt+Shift+Forward)
+
+### Fix sudo (or perform any other operation as root)
+
+`sudo` will not work in the chroot environment by default. You need to set
+it up as follows:
+
+  1. `sudo enter-chroot -u 0`: this launches a bash shell as root
+  2. `nano /etc/sudoers`
+  3. Uncomment this line:
+     `%wheel  ALL=(ALL) ALL`
+     (the user you created is in group `wheel` by default)
+
+Original crouton documentation
+==============================
+
+For more details, see the original crouton documentation below:
+
 crouton: Chromium OS Ubuntu Chroot Environment
 ==============================================
 
