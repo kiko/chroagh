@@ -66,7 +66,7 @@ for example using a USB key. Put it in the `Downloads` directory.
 
   3. Create the rootfs:
 
-        sudo bash -e installer/main.sh arch -t xfce -f ../ArchLinuxARM-chromebook-latest-rootfs.tar.gz
+        sudo sh -e installer/main.sh arch -t xfce -f ../ArchLinuxARM-chromebook-latest-rootfs.tar.gz
 
      Follow the instructions (press enter anytime you are asked a yes/no
      question). This will take a while, especially if your network is
