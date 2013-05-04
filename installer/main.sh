@@ -34,7 +34,7 @@ if [ -z "$OS" ]; then
     error 2 "$USAGE"
 fi
 
-if [ ! -x "$INSTALLERDIR/$OS/main.sh" ]; then
+if [ ! -e "$INSTALLERDIR/$OS/main.sh" ]; then
     error 2 "$INSTALLERDIR/$OS/main.sh does not exists."
 fi
 
