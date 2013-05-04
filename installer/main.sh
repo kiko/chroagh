@@ -1,4 +1,5 @@
 #!/bin/bash -e
+# FIXME: Can we use sh instead? (${*:2} doesn't work with sh)
 # Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -29,7 +30,7 @@ error() {
 OS=$1
 
 # If OS isn't specified, we should just print help text.
-if [ -z "$INSTALLERDIR/$OS" ]; then
+if [ -z "$OS" ]; then
     error 2 "$USAGE"
 fi
 
@@ -37,5 +38,5 @@ if [ ! -x "$INSTALLERDIR/$OS/main.sh" ]; then
     error 2 "$INSTALLERDIR/$OS/main.sh does not exists."
 fi
 
-$INSTALLERDIR/$OS/main.sh ${*:2}
+sh -e $INSTALLERDIR/$OS/main.sh ${*:2}
 
