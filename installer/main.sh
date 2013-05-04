@@ -38,5 +38,5 @@ if [ ! -e "$INSTALLERDIR/$OS/main.sh" ]; then
 fi
 
 shift
-sh -e $INSTALLERDIR/$OS/main.sh $@
+sh -e $INSTALLERDIR/$OS/main.sh "$@"
 
