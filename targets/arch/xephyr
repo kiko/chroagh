@@ -15,7 +15,7 @@ echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
 aurcompile mawk
 
 #FIXME: Missing dmz-cursor-theme
-pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput --needed
+pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput xorg-xinit --needed --noconfirm
 
 aurcompile keylaunch
 
