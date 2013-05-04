@@ -14,5 +14,5 @@ pacman -S xfce4 xfce4-goodies ttf-freefont --needed
 
 #FIXME
 TIPS="$TIPS
-You can start Xfce via the startxfce4 host command: sudo startxfce4 (THIS SEEMS BROKEN NOW)
+You can start Xfce via the startxfce4 host command: sudo startxfce4
 "

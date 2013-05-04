@@ -38,6 +38,14 @@ else
 fi
 ' > /etc/X11/xinit/xserverrc
 
+# Add /usr/local/bin to ENV_PATH in /etc/login.defs (necessary for host startxfce4 to work)
+if ! grep -q -e '^ENV_PATH.*[=:]/usr/local/bin:' -e '^ENV_PATH.*[=:]/usr/local/bin[ \t]*$' /etc/login.defs; then
+	if [ ! -e /etc/login.defs.croutonorig ]; then
+		cp /etc/login.defs /etc/login.defs.croutonorig
+	fi
+	sed -i -e "s|^\(ENV_PATH.*PATH=\)\(.*\)$|\1/usr/local/bin:\2|" /etc/login.defs
+fi
+
 TIPS="$TIPS
 You can flip through your running chroot desktops and Chromium OS by hitting
 Ctrl+Alt+Shift+Back and Ctrl+Alt+Shift+Forward.
