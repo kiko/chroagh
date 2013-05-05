@@ -45,6 +45,11 @@
 "xte 'keyup Escape'; env DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c 'readkey root'"
   Control + Shift + Alt + Escape
 
+# Map Ctrl+click to middle button
+# Map on Release so that it does not appear both buttons are pressed
+"xte 'mouseclick 2'"
+  Control + b:1 + Release
+
 ##################################
 # End of xbindkeys configuration #
 ##################################
