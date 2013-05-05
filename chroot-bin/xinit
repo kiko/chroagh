@@ -48,8 +48,8 @@ queuelaunch croutonpowerd --daemon
 if [ -n "$hostxauth" ]; then
     queuelaunch env DISPLAY=':0' XAUTHORITY="$hostxauth" croutoncursor ":$disp"
 
-    ln -sf '/etc/crouton/keylaunchrc-xephyr' "$HOME/.keylaunchrc"
-    queuelaunch keylaunch
+    ln -sf '/etc/crouton/xbindkeysrc-xephyr' "$HOME/.xbindkeysrc"
+    queuelaunch xbindkeys
 fi
 
 # Launch touchegg if it is requested.
