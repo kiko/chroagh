@@ -12,11 +12,16 @@ HOSTBINDIR="$SCRIPTDIR/host-bin"
 TARGETSDIR="$SCRIPTDIR/targets/arch"
 SRCDIR="$SCRIPTDIR/src"
 
-ARCH="`uname -m`"
+ARCH="`uname -m |  sed -e 's i.86 i686 ;s arm.* armv7h ;'`"
 DOWNLOADONLY=''
 ENCRYPT=''
 KEYFILE=''
-MIRROR='unspecified'
+MIRROR=''
+REPOS=''
+MIRROR86='http://mirrors.kernel.org/archlinux/$repo/os/$arch' 
+REPOS86='core community extra'
+MIRRORARM='http://mirror.archlinuxarm.org/armv7h/$repo'
+REPOSARM='core community extra alarm aur'
 NAME=''
 PREFIX='/usr/local'
 PROXY='unspecified'
@@ -35,8 +40,7 @@ Only ARM architecture is suppported/tested at this time (Samsung Chromebook ARM)
 If run with -f, a tarball is used to bootstrap the chroot. If specified with -d,
 the tarball is created for later use with -f.
 
-This must be run as root unless -d is specified AND fakeroot is installed AND
-/tmp is mounted exec and dev.
+This must be run as root.
 
 It is highly recommended to run this from a crosh shell (Ctrl+Alt+T), not VT2.
 
@@ -49,7 +53,9 @@ Options:
     -k KEYFILE  File or directory to store the (encrypted) encryption keys in.
                 If unspecified, the keys will be stored in the chroot if doing a
                 first encryption, or auto-detected on existing chroots.
-    -m MIRROR   Mirror to use for pacman.
+    -m MIRROR   Mirror to use for bootstrapping and pacman.
+                Default for x86/amd64: $MIRROR86
+                Default for arm7h: $MIRRORARM
     -n NAME     Name of the chroot. Default is \"alarm\".
     -p PREFIX   The root directory in which to install the bin and chroot
                 subdirectories and data. Default: $PREFIX
@@ -100,8 +106,8 @@ while getopts 'a:def:k:m:n:p:P:s:t:T:uV' f; do
 done
 shift "$((OPTIND-1))"
 
-if [ ! "$ARCH" = "armv7l" ]; then
-    error 2 "Only ARM architecture is supported (armv7l)"
+if [ ! "$ARCH" = "armv7h" ]; then
+    error 2 "Only ARM architecture is supported currently (armv7h)"
 fi
 
 # If targets weren't specified, we should just print help text.
@@ -113,6 +119,22 @@ fi
 if [ ! $# = 0 ]; then
     error 2 "$USAGE"
 fi
+
+# If MIRROR wasn't specified, choose it based on ARCH.
+if [ -z "$MIRROR" ]; then
+    if [ "$ARCH" = 'x86_64' -o "$ARCH" = 'i686' ]; then
+        MIRROR="$MIRROR86"
+    else
+        MIRROR="$MIRRORARM"
+    fi
+fi
+
+if [ "$ARCH" = 'x86_64' -o "$ARCH" = 'i686' ]; then
+    REPOS="$REPOS86"
+else
+    REPOS="$REPOSARM"
+fi
+
 
 # Confirm or list targets if requested (and download only isn't chosen)
 if [ -z "$DOWNLOADONLY" ]; then
@@ -147,24 +169,19 @@ if [ -z "$DOWNLOADONLY" ]; then
     fi
 fi
 
-# If we're not running as root, we must be downloading and have fakeroot and
-# have an exec and dev /tmp
-if grep -q '.* /tmp .*\(nodev\|noexec\)' /proc/mounts; then
-    NOEXECTMP=y
-else
-    NOEXECTMP=n
-fi
-FAKEROOT=''
 if [ ! "$USER" = root -a ! "$UID" = 0 ]; then
-    FAKEROOT=fakeroot
-    if [ "$NOEXECTMP" = y -o -z "$DOWNLOADONLY" ] \
-            || ! hash "$FAKEROOT" 2>/dev/null; then
-        error 2 "$APPLICATION must be run as root."
-    fi
+    error 2 "$APPLICATION must be run as root."
 fi
 
 # If we are only downloading, we need a destination tarball
 if [ -n "$DOWNLOADONLY" -a -z "$TARBALL" ]; then
+    echo "If we are only downloading (-d), we need a destination tarball (-f)" 1>&2
+    error 2 "$USAGE"
+fi
+
+# If we are only downloading, we cannot update
+if [ -n "$DOWNLOADONLY" -a -n "$UPDATE" ]; then
+    echo "If we are only downloading (-d), we cannot update (-u)" 1>&2
     error 2 "$USAGE"
 fi
 
@@ -195,50 +212,48 @@ CHROOT="$CHROOTS/${NAME:=alarm}"
 
 # Confirm we have write access to the directory before starting.
 NODOWNLOAD=''
-if [ -z "$DOWNLOADONLY" ]; then
-    create='-n'
-    if [ -d "$CHROOT" ] && ! rmdir "$CHROOT" 2>/dev/null; then
-        if [ -z "$UPDATE" ]; then
-            error 1 "$CHROOT already has stuff in it!
+create='-n'
+if [ -d "$CHROOT" ] && ! rmdir "$CHROOT" 2>/dev/null; then
+    if [ -z "$UPDATE" ]; then
+        error 1 "$CHROOT already has stuff in it!
 Either delete it, specify a different name (-n), or specify -u to update it."
-        fi
-        NODOWNLOAD='y'
-        create=''
-        echo "$CHROOT already exists; updating it..." 1>&2
-    elif [ -n "$UPDATE" ]; then
-        error 1 "$CHROOT does not exist; cannot update."
     fi
+    NODOWNLOAD='y'
+    create=''
+    echo "$CHROOT already exists; updating it..." 1>&2
+elif [ -n "$UPDATE" ]; then
+    error 1 "$CHROOT does not exist; cannot update."
+fi
 
-    # Mount the chroot and update CHROOT path
-    if [ -n "$KEYFILE" ]; then
-        CHROOT="`sh -e "$HOSTBINDIR/mount-chroot" -k "$KEYFILE" \
-                            $create $ENCRYPT -p -c "$CHROOTS" "$NAME"`"
-    else
-        CHROOT="`sh -e "$HOSTBINDIR/mount-chroot" \
-                            $create $ENCRYPT -p -c "$CHROOTS" "$NAME"`"
-    fi
+# Mount the chroot and update CHROOT path
+if [ -n "$KEYFILE" ]; then
+    CHROOT="`sh -e "$HOSTBINDIR/mount-chroot" -k "$KEYFILE" \
+                        $create $ENCRYPT -p -c "$CHROOTS" "$NAME"`"
+else
+    CHROOT="`sh -e "$HOSTBINDIR/mount-chroot" \
+                        $create $ENCRYPT -p -c "$CHROOTS" "$NAME"`"
+fi
 
-    # Auto-unmount the chroot when the script exits
-    TRAP="sh -e '$HOSTBINDIR/unmount-chroot' \
-                    -y -c '$CHROOTS' '$NAME' 2>/dev/null || true;$TRAP"
-    trap "$TRAP" INT HUP 0
+# Auto-unmount the chroot when the script exits
+TRAP="sh -e '$HOSTBINDIR/unmount-chroot' \
+                -y -c '$CHROOTS' '$NAME' 2>/dev/null || true;$TRAP"
+trap "$TRAP" INT HUP 0
 
-    # Sanity-check the release if we're updating
-    if [ -n "$NODOWNLOAD" ] \
-            && ! grep -q "ID=archarm\$" "$CHROOT/etc/os-release" ; then
-        if [ ! "$UPDATE" = 2 ]; then
-            error 1 \
+# Sanity-check the release if we're updating
+if [ -n "$NODOWNLOAD" ] \
+        && ! grep -q "ID=archarm\$" "$CHROOT/etc/os-release" ; then
+    if [ ! "$UPDATE" = 2 ]; then
+        error 1 \
 "Chroot doesn't look like ArchLinux! Please correct the -r option, or specify a second -u to
 change the release, upgrading the chroot (dangerous)."
-        else
-            echo "WARNING: Considering the chroot as ArchLinux..." 2>&1
-            echo "Press Control-C to abort; upgrade will continue in 5 seconds." 1>&2
-            sleep 5
-        fi
+    else
+        echo "WARNING: Considering the chroot as ArchLinux..." 2>&1
+        echo "Press Control-C to abort; upgrade will continue in 5 seconds." 1>&2
+        sleep 5
     fi
-
-    mkdir -p "$BIN"
 fi
+
+mkdir -p "$BIN"
 
 # Check and update dev boot settings. This may fail on old systems; ignore it.
 if [ -z "$DOWNLOADONLY" ] && \
@@ -287,7 +302,110 @@ fi
 
 # Download the bootstrap data if appropriate
 if [ -z "$NODOWNLOAD" ] && [ -n "$DOWNLOADONLY" -o -z "$TARBALL" ]; then
-	error 2 "Sorry, I cannot bootstrap Arch Linux. Please download a chroot and specifiy it with -f."
+    #This code has been adapted from a script found on the Arch Linux Wiki:
+    # https://wiki.archlinux.org/index.php/Install_from_Existing_Linux
+
+    # Packages to install in the bootstrap chroot
+    PACKAGES_BOOTSTRAP="acl attr bzip2 curl expat glibc gpgme libarchive libassuan libgpg-error libssh2 openssl pacman xz zlib pacman-mirrorlist coreutils bash grep gawk file tar ncurses readline libcap util-linux pcre gcc-libs lzo2 arch-install-scripts"
+
+    # Packages to install in the target 
+    PACKAGES_TARGET="bash bzip2 coreutils cryptsetup diffutils file filesystem findutils gawk gcc-libs gettext glibc grep gzip heirloom-mailx inetutils iproute2 iputils less licenses man-db man-pages nano pacman pacman-mirrorlist perl procps-ng psmisc sed shadow sysfsutils tar texinfo usbutils util-linux vi which"
+    # Temporarily add libsigsegv (gawk missing dependency)
+    # https://github.com/archlinuxarm/PKGBUILDs/issues/438
+    PACKAGES_TARGET="$PACKAGES_TARGET libsigsegv"
+
+    LIST=`mktemp --tmpdir=/tmp "$APPLICATION.XXX"`
+    FETCHDIR=`mktemp -d --tmpdir=/tmp "$APPLICATION.XXX"`
+
+    # Paranoid mode: make sure $FETCHDIR really exists, the trap
+    # below could lead to bad results otherwise
+    if [ ! -d $FETCHDIR ]; then
+        error 2 "FETCHIR=$FETCHDIR is not a directory"
+    fi
+
+    # Make sure tmp files are cleaned on on exit
+    # Most likely safer than rm -rf $FETCHDIR
+    # FIXME: TRAP is executed twice, hence the need to make sure rmdir does not fail
+    TRAP="rm -f $FETCHDIR/*; rmdir $FETCHDIR 2>/dev/null || true; rm -f $LIST;$TRAP"
+    trap "$TRAP" INT HUP 0
+
+    echo "Fetching repository packages list..."
+    # Create a list with urls for the arch packages
+    for REPO in $REPOS; do
+	    echo "Fetching $REPO..."
+	    MIRRORBASE=`echo $MIRROR | sed -e "s/\\$repo/$REPO/" -e "s/\\$arch/$ARCH/"`
+            wget -q -O- "$MIRRORBASE" |sed  -n "s|.*href=\"\\([^\"]*\\).*|$MIRRORBASE/\\1|p"|grep -v 'sig$'|uniq >> $LIST  
+    done
+
+    echo "Downloading and extracting packages..."
+    # Download and extract each package.
+    for PACKAGE in $PACKAGES_BOOTSTRAP; do
+        URL=`grep "$PACKAGE-[0-9]" $LIST|head -n1`
+        if [ -z "$URL" ]; then
+            error 2 "Cannot find package $PACKAGE"
+        fi
+        FILE=`echo $URL|sed 's/.*\/\([^\/][^\/]*\)$/\1/'`
+        wget "$URL" -c -O "$FETCHDIR/$FILE" 
+        tar xfk "$FETCHDIR/$FILE" -C "$CHROOT"
+    done
+            
+    # Copy packages tarballs for faster installation
+    mkdir -p "$CHROOT/var/cache/pacman/pkg"
+    mv $FETCHDIR/* $CHROOT/var/cache/pacman/pkg
+    
+    # Hash for empty password  Created by doing: openssl passwd -1 -salt ihlrowCo and entering an empty password (just press enter)
+    echo 'root:$1$ihlrowCo$sF0HjA9E8up9DYs258uDQ0:10063:0:99999:7:::' > "$CHROOT/etc/shadow"
+    echo "root:x:0:0:root:/root:/bin/bash" > "$CHROOT/etc/passwd" 
+    touch "$CHROOT/etc/group"
+    echo "archbootstrap" > "$CHROOT/etc/hostname"
+    test -e "$CHROOT/etc/mtab" || echo "rootfs / rootfs rw 0 0" > "$CHROOT/etc/mtab"
+    sed -ni '/^[ \t]*CheckSpace/ !p' "$CHROOT/etc/pacman.conf"
+    sed -i "s/^[ \t]*SigLevel[ \t].*/SigLevel = Never/" "$CHROOT/etc/pacman.conf"
+    echo "Server = $MIRROR" > "$CHROOT/etc/pacman.d/mirrorlist"
+
+    ln -s /usr/lib "$CHROOT/lib"
+
+    # We could use pacstrap to install the base packages, but it does not like not being able
+    # to do mount --bind (which cannot be done inside the chroot for some reason)
+
+    NEWCHROOT="$CHROOT/mnt"
+    echo "Creating install root at $NEWCHROOT"
+    mkdir -m 0755 -p "$NEWCHROOT"/var/cache/pacman/pkg
+    mkdir -m 0755 -p "$NEWCHROOT"/var/lib/pacman
+    mkdir -m 0755 -p "$NEWCHROOT"/var/log
+    mkdir -m 0755 -p "$NEWCHROOT"/dev
+    mkdir -m 0755 -p "$NEWCHROOT"/run
+    mkdir -m 0755 -p "$NEWCHROOT"/etc
+    mkdir -m 1777 -p "$NEWCHROOT"/tmp
+    mkdir -m 0555 -p "$NEWCHROOT"/sys
+    mkdir -m 0555 -p "$NEWCHROOT"/proc
+
+    enter-chroot -n "$NAME" -x /usr/bin/pacman -r /mnt -Sy $PACKAGES_TARGET --noconfirm
+
+    echo "Swapping content of bootstrap and install root..."
+    mkdir -p "$CHROOT"/bootstrap
+    for dir in "$CHROOT"/*
+    do
+	    if [ ! $dir = "$CHROOT"/bootstrap ]; then
+		    mv $dir "$CHROOT"/bootstrap
+	    fi
+    done
+
+    mv "$CHROOT"/bootstrap/mnt/* "$CHROOT"
+    cp -a "$CHROOT"/bootstrap/etc/pacman.d/mirrorlist "$CHROOT"/etc/pacman.d/
+    rm -rf "$CHROOT"/bootstrap
+
+    # Tar it up if we're only downloading
+    if [ -n "$DOWNLOADONLY" ]; then
+        echo 'Compressing bootstrap files...' 1>&2
+        tar -C "$CHROOTS" -cajf "$TARBALL" "$CHROOT"
+        echo 'Done!' 1>&2
+        echo "NOTE: chroot has been leftover in $CHROOT." 1>&2
+        echo "You can finish the installation by running the same command, using -u and -t parameters, and removing -f and -d parameters." 1>&2
+        echo "Alternatively, you can delete the chroot by running:" 1>&2
+        echo "sudo delete-chroot $NAME" 1>&2
+        exit 0
+    fi
 fi
 
 # Ensure that /usr/local/bin and /etc/crouton exist

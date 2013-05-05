@@ -5,7 +5,7 @@
 
 # Usage: prepare.sh arch mirror release proxy version
 ARCH="${1:-"#ARCH"}"
-MIRROR="${2:-"#MIRROR"}"
+MIRROR=${2:-'#MIRROR'} # MIRROR contains "$repo": prevent expansion
 PROXY="${3:-"#PROXY"}"
 VERSION="${4:-"#VERSION"}"
 
@@ -31,8 +31,8 @@ compile() {
 # $1: name; target is /usr/local/bin/crouton$1
 aurcompile() {
     echo "Compiling $1 from AUR..." 1>&2
-    # Make sure base-devel is installed
-    pacman -Su base-devel --noconfirm --needed
+    # Make sure base-devel and wget are installed
+    pacman -Su base-devel wget --noconfirm --needed
     # Create a user to do the compilation
     if ! cat /etc/shadow | grep -q aur; then
         useradd aur -u 1999
