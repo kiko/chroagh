@@ -23,11 +23,54 @@ all your data), see the instructions
 It will take about 15 minutes. From then on, on each boot-up, you will need
 to press Ctrl+D.
 
+### Create the chroot
+
+  1. Launch a crosh shell (Ctrl+Alt+T, you can paste in the console using
+     Ctrl+Shift+V), then enter `shell`.
+  2. Download and extract chroagh:
+
+        cd ~/Downloads
+        wget https://api.github.com/repos/drinkcat/chroagh/tarball -O chroagh.tar.gz
+        tar xvf chroagh.tar.gz
+        cd drinkcat-chroagh-*
+
+  3. Create the rootfs:
+
+        sudo sh -e installer/main.sh arch -t xfce
+
+    (you can specify a mirror by adding
+    `-m 'http://tw.mirror.archlinuxarm.org/armv7h/$repo'`: just change the
+    country code from `tw` to somewhere near you)
+
+     Follow the instructions (press enter anytime you are asked a yes/no
+     question). This will take a while, especially if your network is
+     slow.
+
+### Start the chroot
+
+  * `sudo enter-chroot` to launch a bash shell
+  * `sudo startxfce4` to start XFCE in a separate screen (you can switch
+    between screens with Ctrl+Alt+Shift+Back or Ctrl+Alt+Shift+Forward)
+
+### Fix sudo (or perform any other operation as root)
+
+`sudo` will not work in the chroot environment by default. You need to set
+it up as follows:
+
+  1. `sudo enter-chroot -u 0`: this launches a bash shell as root
+  2. `nano /etc/sudoers`
+  3. Uncomment this line:
+     `%wheel  ALL=(ALL) ALL`
+     (the user you created is in group `wheel` by default)
+
 ### Extract the rootfs
 
-For now, this needs to be done on a separate computer, as it requires 8GB
-of free space to extract the image (the image is meant to be written on 
-a SD card).
+(This is not recommended anymore: chroagh can bootstrap ArchLinux now)
+
+If you want to extract the rootfs from an official ArchLinux image, you
+can follow these steps. This needs to be done on a separate computer, as
+it requires 8GB of free space to extract the image (the image is meant
+to be written on a SD card).
 
   1. Download and extract the latest ArchLinux ARM image for the chromebook:
 
@@ -53,41 +96,8 @@ a SD card).
 Transfer `ArchLinuxARM-chromebook-latest-rootfs.tar.gz` to the Chromebook,
 for example using a USB key. Put it in the `Downloads` directory.
 
-### Create the chroot
-
-  1. Launch a crosh shell (Ctrl+Alt+T, you can paste in the console using
-     Ctrl+Shift+V), then enter `shell`.
-  2. Download and extract chroagh:
-
-        cd ~/Downloads
-        wget https://api.github.com/repos/drinkcat/chroagh/tarball -O chroagh.tar.gz
-        tar xvf chroagh.tar.gz
-        cd drinkcat-chroagh-*
-
-  3. Create the rootfs:
-
+The rootfs can then be installed using:
         sudo sh -e installer/main.sh arch -t xfce -f ../ArchLinuxARM-chromebook-latest-rootfs.tar.gz
-
-     Follow the instructions (press enter anytime you are asked a yes/no
-     question). This will take a while, especially if your network is
-     slow.
-
-### Start the chroot
-
-  * `sudo enter-chroot` to launch a bash shell
-  * `sudo startxfce4` to start XFCE in a separate screen (you can switch
-    between screens with Ctrl+Alt+Shift+Back or Ctrl+Alt+Shift+Forward)
-
-### Fix sudo (or perform any other operation as root)
-
-`sudo` will not work in the chroot environment by default. You need to set
-it up as follows:
-
-  1. `sudo enter-chroot -u 0`: this launches a bash shell as root
-  2. `nano /etc/sudoers`
-  3. Uncomment this line:
-     `%wheel  ALL=(ALL) ALL`
-     (the user you created is in group `wheel` by default)
 
 Original crouton documentation
 ==============================
