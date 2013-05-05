@@ -202,9 +202,6 @@ fi
 # Soft-link resolv.conf so that updates are automatically propagated
 ln -sf '/var/host/shill/resolv.conf' "$CHROOT/etc/resolv.conf"
 
-# Copy timezone information
-cp -f /etc/localtime "$CHROOT/etc/localtime"
-
 # Follows and fixes dangerous symlinks, returning the canonicalized path.
 fixabslinks() {
     local p="$CHROOT/$1" c
