@@ -48,6 +48,7 @@ Options:
     -a ARCH     The architecture to prepare the chroot for. Default: $ARCH
     -d          Downloads the bootstrap tarball but does not prepare the chroot.
     -e          Encrypt the chroot with ecryptfs using a passphrase.
+                If specified twice, prompt to change the encryption passphrase.
     -f TARBALL  The tarball to use, or download to in the case of -d.
                 When using a prebuilt tarball, -a and -r are ignored.
     -k KEYFILE  File or directory to store the (encrypted) encryption keys in.
@@ -90,7 +91,7 @@ while getopts 'a:def:k:m:n:p:P:s:t:T:uV' f; do
     case "$f" in
     a) ARCH="$OPTARG";;
     d) DOWNLOADONLY='y';;
-    e) ENCRYPT='-e';;
+    e) ENCRYPT="${ENCRYPT:-"-"}e";;
     f) TARBALL="$OPTARG";;
     k) KEYFILE="$OPTARG";;
     m) MIRROR="$OPTARG";;
