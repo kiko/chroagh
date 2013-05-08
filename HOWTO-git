@@ -1,0 +1,26 @@
+This repository is a bit strange, because we constantly rebase on dnschneid/crouton (merging modifications would be even more difficult, as we renamed files and git-merge is very confused...)...
+
+That means "git pull" will not work, you need to "git pull --force".
+
+Rebasing is done as follows (you need to be in the master branch):
+
+git tag -f lastcrouton crouton/master
+# Save a copy of the old branch, just in case:
+git branch -f master-base-`cat .git/refs/tags/lastcrouton`
+git push origin master-base-`cat .git/refs/tags/lastcrouton`
+
+git fetch --all
+git rebase crouton/master
+
+Now inspect the last modifications in crouton:
+
+git format-patch lastcrouton..crouton/master
+
+This create a set of 00XX-YYY.patch, that you can have a look at, one by one, and apply
+them in the arch directories.
+
+========
+
+Commits in crouton that I have not forwarded yet:
+6e836cbc37747210de67111142e5780e6192bf6e @drinkcat: Use useradd instead of adduser to avoid
+
