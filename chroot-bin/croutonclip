@@ -1,0 +1,57 @@
+#!/bin/sh
+# Synchronize clipboard on window change
+# FIXME: Missing sanity checks...
+# Depends on:
+#  - netcat (openbsd variant)
+#  - xclip
+# xclip: We use the Ctrl+C/V type of keyboard (not the select/Middle button)
+
+CUR=""
+NEXT=""
+
+# Iterate over each window (ratpoison command at the end of this loop)
+while read line; do
+    echo $line
+    ACTIVE=`echo $line | cut -f 1 -d '#'`
+    NAME=`echo $line | cut -f 3 -d '#'`
+    
+    ID=invalid
+    if echo $NAME | grep -q "aura_root"; then
+        ID=aura
+    elif echo $NAME | grep -q "Xephyr"; then
+        ID=`echo $NAME | sed -e 's/^.*Xephyr on \(:[0-9]\)\+.[0-9]\+.*/\1/'`
+    else
+        echo "Cannot parse window type ($line)." 1>&2
+        exit 2
+    fi
+    
+    if [ "$ACTIVE" = "+" ]; then
+        CUR=$ID
+    elif [ "$ACTIVE" = "*" ]; then
+        NEXT=$ID
+    fi
+done << EOF
+$(DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c 'windows %s#%n#%t')
+EOF
+
+CLIP=`mktemp`
+# Copy current clipboard content
+if [ "$CUR" = "aura" ]; then
+    echo x | nc -q 1 127.0.0.1 30001 > $CLIP
+else
+    DISPLAY=$CUR xclip -o -sel clip > $CLIP
+fi
+
+echo "==$CUR=="
+cat $CLIP
+echo "==$NEXT=="
+
+# Copy current clipboard content
+if [ "$NEXT" = "aura" ]; then
+    (echo -n P; cat $CLIP) | nc 127.0.0.1 30001
+else
+    cat $CLIP | DISPLAY=$NEXT xclip -i -sel clip
+fi
+
+rm $CLIP
+
