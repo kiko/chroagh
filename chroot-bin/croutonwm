@@ -52,6 +52,7 @@ if [ -r "$hostxauth" ]; then
                     /usr/bin/xinput set-prop \$id 'Tap Paused' 0 2>/dev/null || true; \
                 done
             addhook switchwin exec sleep .1; /usr/bin/xrefresh
+            addhook switchwin exec /usr/local/bin/croutonclip
             addhook quit set padding 0 0 0 0
             addhook deletewindow exec \
                 [ "\`"/usr/bin/ratpoison" -c "windows %%"\`" = % ] \
