@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 # Synchronize clipboard on window change
 # Depends on:
 #  - netcat (_patched_ openbsd variant needed for -q option)
@@ -50,7 +50,7 @@ EOF
 
 if [ -z "$current" -o -z "$next" ]; then
     echo "Cannot figure current or next window ($current,$next)." 1>&2
-    exit 2
+    exit 0
 fi
 
 cliptmp=`mktemp "croutonclip.XXX"`
@@ -59,7 +59,10 @@ trap "rm -f $cliptmp" INT HUP 0
 if [ "$current" = "aura" ]; then
     # -q -1 forces netcat to listen to the whole response even though stdin
     # is closed.
-    echo x | nc -q -1 127.0.0.1 30001 > $cliptmp
+    if ! echo x | nc -q -1 127.0.0.1 30001 > $cliptmp; then
+        echo "crouton-clip not listening on port 30001." 1>&2
+        exit 0
+    fi
 else
     DISPLAY=$current xclip -o -sel clip > $cliptmp
 fi
@@ -76,4 +79,6 @@ if [ "$next" = "aura" ]; then
 else
     cat $cliptmp | DISPLAY=$next xclip -i -sel clip
 fi
+
+exit 0
 
