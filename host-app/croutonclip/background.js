@@ -1,34 +1,130 @@
-// FIXME: Add error checking everywhere...
-// Could the window be in the background? Or do we want it anyway?
+var DEBUG = true;
+var ADDRESS = "127.0.0.1";
+var PORT = 30001;
 
-// Port 30001 is guaranteed not to be taken by random outgoing connections,
-// since /proc/sys/net/ipv4/ip_local_port_range = "32768	61000"
+var appwin_; // Application window
+var socketId_; // Listen socket Id
+var acceptId_; // Accept socket Id
+var reading_ = false; // Currently reading a second block of data
 
-var appwin;
-var socketInfo;
+var document_;
+var clipboardholder_;
+var logger_;
+var info_;
 
 function clipboardStart() {
     console.log("start!");
 
     chrome.app.window.create('window.html', {
         'bounds': {
-        'width': 400,
-        'height': 500
-        }},
+            'width': 600,
+            'height': 600
+        },
+        'hidden': !DEBUG
+        },
         function(win) {
-            console.log("win create!");
-            appwin = win;
+            appwin_ = win;
+            // See http://code.google.com/p/chromium/issues/detail?id=148522
             win.contentWindow.addEventListener("load", appWindowCallback);
         }
     );
+}
+
+function appWindowCallback() {
+    document_ = appwin_.contentWindow.document;
+    clipboardholder_ = document_.getElementById("clipboardholder");
+    logger_ = document_.getElementById("logger");
+    info_ = document_.getElementById("info");
+
+    printDebug("appWindowCallback");
 
     chrome.socket.create('tcp', {}, function(createInfo) {
-        socketInfo = createInfo;
-        chrome.socket.listen(socketInfo.socketId, "127.0.0.1", 30001, function(connection) {
-            printDebug("--listen");
-            chrome.socket.accept(socketInfo.socketId, onSocketAccept);
+        socketId_ = createInfo.socketId;
+        chrome.socket.listen(socketId_, ADDRESS, PORT, function(result) {
+            printDebug("listen (" + result + ")");
+            if (result < 0) {
+                printError("Cannot listen on " + ADDRESS + ":" + PORT +
+                    ": Is the port already in use by another application?");
+                return;
+            }
+            chrome.socket.accept(socketId_, onSocketAccept);
         });
     });
+}
+
+function onSocketAccept(acceptInfo) {
+    acceptId_ = acceptInfo.socketId;
+    printDebug("accept");
+    if (acceptInfo.resultCode < 0) {
+        printError("Error on accept.");
+        // FIXME: Try to accept a new connection? Or bail out?
+        return;
+    }
+
+    readNext(false);
+}
+
+function readNext(reading) {
+    reading_ = reading;
+    chrome.socket.read(acceptId_, onSocketRead);
+}
+
+function onSocketRead(readInfo) {
+    printDebug("read(" + readInfo.resultCode + ")");
+
+    if (readInfo.resultCode < 0) {
+        if (reading_) {
+            printDebug("copy (" + clipboardholder_.value + ")");
+            reading_ = false;
+            clipboardholder_.style.display = "block";
+            clipboardholder_.select();
+            document_.execCommand("Copy");
+            clipboardholder_.style.display = "none";
+            acceptNext();
+            return;
+        }
+    }
+
+    var data = arrayBufferToString(readInfo.data, 0);
+
+    printDebug("read(data=" + data + ")");
+
+    if (reading_ || (data.length > 0 && data[0] == 'P')) {
+        // Copy data to clipboard
+        clipboardholder_.style.display = "block";
+        if (!reading_) {
+            reading_ = true;
+            clipboardholder_.value = data.substring(1);
+        } else {
+            clipboardholder_.value += data;
+        }
+        readNext(true);
+    } else {
+        clipboardholder_.style.display = "block";
+        clipboardholder_.value = "";
+        clipboardholder_.select();
+        document_.execCommand("Paste");
+        clipboardholder_.style.display = "none";
+        var clipdata = clipboardholder_.value;
+        var clipdataarray = stringToUint8Array(clipdata);
+        var outputBuffer = new ArrayBuffer(clipdataarray.byteLength);
+        var view = new Uint8Array(outputBuffer)
+        view.set(clipdataarray, 0);
+
+        printDebug("clip(" + clipdata + ")");
+        chrome.socket.write(acceptId_, outputBuffer, onSocketWrite);
+    }
+}
+
+function onSocketWrite(writeInfo) {
+    // FIXME: Check that all the bytes have been written?
+    printDebug("write(" + writeInfo.bytesWritten + ")");
+    acceptNext();
+}
+
+function acceptNext() {
+    chrome.socket.destroy(acceptId_);
+    chrome.socket.accept(socketId_, onSocketAccept);
 }
 
 // Copied from chrome-app-samples/webserver
@@ -51,64 +147,20 @@ function arrayBufferToString(buffer, index) {
     return str;
 };
 
-function onSocketAccept(acceptInfo) {
-    console.log("Accept!");
-    printDebug("--accept");
-
-    var asocketId = acceptInfo.socketId;
-
-    chrome.socket.read(asocketId, function(readInfo) {
-        // FIXME: We assume that all the data will fit in a single read
-        var data = arrayBufferToString(readInfo.data, 0);
-
-        printDebug("--read(" + data + ")");
-
-        var document = appwin.contentWindow.document;
-
-        clipboardholder= document.getElementById("clipboardholder");
-
-        if (data.length > 0 && data[0] == 'P') {
-            // Copy data to clipboard
-            clipboardholder= document.getElementById("clipboardholder");
-            clipboardholder.style.display = "block";
-            clipboardholder.value = data.substring(1);
-            clipboardholder.select();
-            document.execCommand("Copy");
-            clipboardholder.style.display = "none";
-        } else {
-            clipboardholder.style.display = "block";
-            clipboardholder.value = "";
-            clipboardholder.select();
-            document.execCommand("Paste");
-            clipboardholder.style.display = "none";
-            var clipdata = clipboardholder.value;
-            var clipdataarray = stringToUint8Array(clipdata);
-            var outputBuffer = new ArrayBuffer(clipdataarray.byteLength);
-            var view = new Uint8Array(outputBuffer)
-            view.set(clipdataarray, 0);
-
-            printDebug("--clip(" + clipdata + ")");
-            chrome.socket.write(acceptInfo.socketId, outputBuffer, function(value) {
-                printDebug("--write(" + value.bytesWritten + ")");
-            });
-        }
-
-        chrome.socket.destroy(acceptInfo.socketId);
-        chrome.socket.accept(socketInfo.socketId, onSocketAccept);
-    });
-}
-
-function appWindowCallback() {
-    console.log("callback!");
-    printDebug("--test");
-}
-
 function printDebug(str) {
-    appwin.contentWindow.document.body.appendChild(appwin.contentWindow.document.createTextNode(str));
+    console.log(str);
+    if (DEBUG) {
+        logger_.textContent += str + "\n";
+    }
+}
+
+function printError(str) {
+    var info = appwin_.contentWindow.document.getElementById("info");
+    info.textContent = str;
+    /* Make sure the window gets visible */
 }
 
 chrome.app.runtime.onLaunched.addListener(function() {
     clipboardStart();
 });
-  
 
