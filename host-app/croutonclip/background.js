@@ -52,7 +52,7 @@ function appWindowCallback() {
         });
     });
 
-    appwin_.onClosed.addListener(clipboardStop());
+    appwin_.onClosed.addListener(clipboardStop);
 }
 
 function onSocketAccept(acceptInfo) {
@@ -131,6 +131,7 @@ function acceptNext() {
 }
 
 function clipboardStop() {
+    printDebug("clipboardStop");
     chrome.socket.destroy(socketId_);
 }
 
@@ -171,9 +172,5 @@ function printError(str) {
 
 chrome.app.runtime.onLaunched.addListener(function() {
     clipboardStart();
-});
-
-chrome.app.runtime.onSuspend.addListener(function() {
-    clipboardStop();
 });
 
