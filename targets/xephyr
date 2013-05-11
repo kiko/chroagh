@@ -43,7 +43,7 @@ fi
 apt-get -y --no-install-recommends install \
     xserver-xephyr xinit ratpoison dmz-cursor-theme libgl1-mesa-dri \
     x11-utils x11-xserver-utils xautomation xdotool xinput xterm \
-    keylaunch
+    keylaunch xclip netcat-openbsd
 
 # Compile croutoncursor
 compile cursor '-lX11 -lXfixes -lXrender' \
