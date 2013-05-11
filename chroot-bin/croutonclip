@@ -1,57 +1,79 @@
-#!/bin/sh
+#!/bin/sh -e
 # Synchronize clipboard on window change
-# FIXME: Missing sanity checks...
 # Depends on:
-#  - netcat (openbsd variant)
+#  - netcat (_patched_ openbsd variant needed for -q option)
+#    FIXME:
+#    This may cause problems with distributions that do not allow both
+#    GNU and OpenBSD netcat to be installed at the same time.
+#    Also there is no easy way of telling which one is installed (nc may be
+#    a link to GNU netcat).
+#    + gawk provides networking and may be a better option.
+#    + bash is also an option
+#    + a simple C app could also do the trick.
 #  - xclip
 # xclip: We use the Ctrl+C/V type of keyboard (not the select/Middle button)
+#
+# FIXME: We might have a race condition if the windows are switched to
+# quickly (this script could run twice in parallel).
 
-CUR=""
-NEXT=""
+VERBOSE=
+
+current=""
+next=""
 
 # Iterate over each window (ratpoison command at the end of this loop)
 while read line; do
-    echo $line
-    ACTIVE=`echo $line | cut -f 1 -d '#'`
-    NAME=`echo $line | cut -f 3 -d '#'`
+    if [ -n "$VERBOSE" ]; then
+        echo $line
+    fi
+    active=`echo $line | cut -f 1 -d '#'`
+    name=`echo $line | cut -f 3 -d '#'`
     
-    ID=invalid
-    if echo $NAME | grep -q "aura_root"; then
-        ID=aura
-    elif echo $NAME | grep -q "Xephyr"; then
-        ID=`echo $NAME | sed -e 's/^.*Xephyr on \(:[0-9]\)\+.[0-9]\+.*/\1/'`
+    id=invalid
+    if echo $name | grep -q "aura_root"; then
+        id=aura
+    elif echo $name | grep -q "Xephyr"; then
+        id=`echo $name | sed -n 's/^Xephyr on \(:[0-9]\+\.[0-9]\+\).*/\1/p'`
     else
         echo "Cannot parse window type ($line)." 1>&2
         exit 2
     fi
     
-    if [ "$ACTIVE" = "+" ]; then
-        CUR=$ID
-    elif [ "$ACTIVE" = "*" ]; then
-        NEXT=$ID
+    if [ "$active" = "+" ]; then
+        current=$id
+    elif [ "$active" = "*" ]; then
+        next=$id
     fi
 done << EOF
 $(DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c 'windows %s#%n#%t')
 EOF
 
-CLIP=`mktemp`
-# Copy current clipboard content
-if [ "$CUR" = "aura" ]; then
-    echo x | nc -q 1 127.0.0.1 30001 > $CLIP
-else
-    DISPLAY=$CUR xclip -o -sel clip > $CLIP
+if [ -z "$current" -o -z "$next" ]; then
+    echo "Cannot figure current or next window ($current,$next)." 1>&2
+    exit 2
 fi
 
-echo "==$CUR=="
-cat $CLIP
-echo "==$NEXT=="
-
+cliptmp=`mktemp "croutonclip.XXX"`
+trap "rm -f $cliptmp" INT HUP 0
 # Copy current clipboard content
-if [ "$NEXT" = "aura" ]; then
-    (echo -n P; cat $CLIP) | nc 127.0.0.1 30001
+if [ "$current" = "aura" ]; then
+    # -q -1 forces netcat to listen to the whole response even though stdin
+    # is closed.
+    echo x | nc -q -1 127.0.0.1 30001 > $cliptmp
 else
-    cat $CLIP | DISPLAY=$NEXT xclip -i -sel clip
+    DISPLAY=$current xclip -o -sel clip > $cliptmp
 fi
 
-rm $CLIP
+if [ -n "$VERBOSE" ]; then
+    echo "==Current: $current=="
+    cat $cliptmp
+    echo "==Next: $next=="
+fi
+
+# Copy current clipboard content
+if [ "$next" = "aura" ]; then
+    (echo -n P; cat $cliptmp) | nc 127.0.0.1 30001
+else
+    cat $cliptmp | DISPLAY=$next xclip -i -sel clip
+fi
 
