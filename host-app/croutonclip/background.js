@@ -1,4 +1,4 @@
-var DEBUG = true;
+var DEBUG = false;
 var ADDRESS = "127.0.0.1";
 var PORT = 30001;
 
@@ -16,9 +16,10 @@ function clipboardStart() {
     console.log("start!");
 
     chrome.app.window.create('window.html', {
+        'id': 'croutonclip',
         'bounds': {
-            'width': 600,
-            'height': 600
+            'width': 400,
+            'height': 300
         },
         'hidden': !DEBUG
         },
@@ -50,6 +51,8 @@ function appWindowCallback() {
             chrome.socket.accept(socketId_, onSocketAccept);
         });
     });
+
+    appwin_.onClosed.addListener(clipboardStop());
 }
 
 function onSocketAccept(acceptInfo) {
@@ -127,6 +130,10 @@ function acceptNext() {
     chrome.socket.accept(socketId_, onSocketAccept);
 }
 
+function clipboardStop() {
+    chrome.socket.destroy(socketId_);
+}
+
 // Copied from chrome-app-samples/webserver
 function stringToUint8Array(string) {
     var buffer = new ArrayBuffer(string.length);
@@ -158,9 +165,15 @@ function printError(str) {
     var info = appwin_.contentWindow.document.getElementById("info");
     info.textContent = str;
     /* Make sure the window gets visible */
+    appwin_.show();
+    appwin_.drawAttention();
 }
 
 chrome.app.runtime.onLaunched.addListener(function() {
     clipboardStart();
+});
+
+chrome.app.runtime.onSuspend.addListener(function() {
+    clipboardStop();
 });
 
