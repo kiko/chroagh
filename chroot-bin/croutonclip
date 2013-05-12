@@ -18,8 +18,8 @@
 
 VERBOSE=
 
+previous=""
 current=""
-next=""
 
 # Iterate over each window (ratpoison command at the end of this loop)
 while read line; do
@@ -40,23 +40,23 @@ while read line; do
     fi
     
     if [ "$active" = "+" ]; then
-        current=$id
+        previous=$id
     elif [ "$active" = "*" ]; then
-        next=$id
+        current=$id
     fi
 done << EOF
 $(DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c 'windows %s#%n#%t')
 EOF
 
-if [ -z "$current" -o -z "$next" ]; then
-    echo "Cannot figure current or next window ($current,$next)." 1>&2
+if [ -z "$previous" -o -z "$current" ]; then
+    echo "Cannot figure previous or current window ($previous,$current)." 1>&2
     exit 0
 fi
 
 cliptmp=`mktemp "croutonclip.XXX"`
 trap "rm -f $cliptmp" INT HUP 0
-# Copy current clipboard content
-if [ "$current" = "aura" ]; then
+# Copy clipboard content from previous window
+if [ "$previous" = "aura" ]; then
     # -q -1 forces netcat to listen to the whole response even though stdin
     # is closed.
     if ! echo x | nc -q -1 127.0.0.1 30001 > $cliptmp; then
@@ -64,20 +64,20 @@ if [ "$current" = "aura" ]; then
         exit 0
     fi
 else
-    DISPLAY=$current xclip -o -sel clip > $cliptmp
+    DISPLAY=$previous xclip -o -sel clip > $cliptmp
 fi
 
 if [ -n "$VERBOSE" ]; then
-    echo "==Current: $current=="
+    echo "==Previous: $previous=="
     cat $cliptmp
-    echo "==Next: $next=="
+    echo "==Current: $current=="
 fi
 
-# Copy current clipboard content
-if [ "$next" = "aura" ]; then
+# Paste clipboard content to current window
+if [ "$current" = "aura" ]; then
     (echo -n P; cat $cliptmp) | nc 127.0.0.1 30001
 else
-    cat $cliptmp | DISPLAY=$next xclip -i -sel clip
+    cat $cliptmp | DISPLAY=$current xclip -i -sel clip
 fi
 
 exit 0
