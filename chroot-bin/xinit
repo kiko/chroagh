@@ -27,6 +27,30 @@ for arg in "$@"; do
     fi
 done
 
+xinitrc=''
+# If we only have xinitrc as client parameter, prepare a custom xinitrc
+if [ -f "$1" ] && [ "$dash" = '--' -o "$2" = '--' ]; then
+	xinitrc=`mktemp --tmpdir=/tmp 'crouton-xinitrc.XXX'`
+	cat > $xinitrc <<EOF
+#!/bin/sh
+
+sh $1
+# Wait for all processes in the background to complete
+wait
+# Switch window to ensure keyboard is copied
+if [ -n "$hostxauth" ]; then
+    DISPLAY=:0 XAUTHORITY=$hostxauth ratpoison -c prev
+else
+    # FIXME: Code for non-Xephyr
+    true
+fi
+# Make sure we have enough time to copy the data
+sleep 2
+rm $xinitrc
+EOF
+	shift 1
+fi
+
 disp=0
 while [ -f "/tmp/.X$disp-lock" ]; do
     disp=$((disp+1))
@@ -60,4 +84,4 @@ if [ -f "$toucheggconf" ]; then
     queuelaunch touchegg
 fi
 
-exec /usr/bin/xinit "$@" $dash $xserverrc ":$disp"
+exec /usr/bin/xinit $xinitrc "$@" $dash $xserverrc ":$disp"
