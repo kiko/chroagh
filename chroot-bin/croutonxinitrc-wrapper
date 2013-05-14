@@ -72,6 +72,11 @@ fi
 
 # Run crouton-specific commands before the server exits:
 
-# Nothing currently
+if [ -r "/etc/X11/host-Xauthority" ]; then
+    DISPLAY=':0' XAUTHORITY="/etc/X11/host-Xauthority" ratpoison -c prev
+else
+    # FIXME: Code for non-Xephyr
+    true
+fi
 
 exit "$ret"
