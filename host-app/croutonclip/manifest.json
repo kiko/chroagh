@@ -2,6 +2,7 @@
   "name": "Crouton-clip",
   "description": "Crouton clipboard synchronization.",
   "version": "0.1",
+  "incognito": "split",
   "app": {
     "background": {
       "scripts": ["background.js"]
