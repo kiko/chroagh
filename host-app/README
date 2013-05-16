@@ -1,8 +1,6 @@
 Install croutonclip:
 
-Copy croutonclip to Downloads.
+Copy croutonclip.crx to Downloads.
 
-Go to chrome://extensions
-
-Enable "developer mode", press "Load unpacked extension..."
+Open the file browser, double-click on croutonclip.crx.
 
