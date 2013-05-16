@@ -381,7 +381,7 @@ if [ -z "$NODOWNLOAD" ] && [ -n "$DOWNLOADONLY" -o -z "$TARBALL" ]; then
     mkdir -m 0555 -p "$NEWCHROOT"/sys
     mkdir -m 0555 -p "$NEWCHROOT"/proc
 
-    enter-chroot -n "$NAME" -x /usr/bin/pacman -r /mnt -Sy $PACKAGES_TARGET --noconfirm
+    sh -e "$HOSTBINDIR/enter-chroot" -c "$CHROOTS" -n "$NAME" -x /usr/bin/pacman -r /mnt -Sy $PACKAGES_TARGET --noconfirm
 
     echo "Swapping content of bootstrap and install root..."
     mkdir -p "$CHROOT"/bootstrap
