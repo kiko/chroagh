@@ -9,10 +9,8 @@ HOSTBIN='startxfce4'
 
 ### Append to prepare.sh:
 
-#FIXME: ttf-freefont is fine, but are there better looking fonts?
-pacman -S xfce4 xfce4-goodies ttf-freefont --needed --noconfirm
+pacman -S xfce4 xfce4-goodies ttf-dejavu --needed --noconfirm
 
-#FIXME
 TIPS="$TIPS
 You can start Xfce via the startxfce4 host command: sudo startxfce4
 "
