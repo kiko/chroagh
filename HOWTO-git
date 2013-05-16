@@ -4,7 +4,8 @@ That means "git pull" will not work, you need to "git pull --force".
 
 Rebasing is done as follows (you need to be in the master branch):
 
-git tag -f lastcrouton crouton/master
+git pull origin lastcrouton
+
 # Save a copy of the old branch, just in case:
 git branch -f master-base-`cat .git/refs/tags/lastcrouton`
 git push origin master-base-`cat .git/refs/tags/lastcrouton`
@@ -18,6 +19,12 @@ git format-patch lastcrouton..crouton/master
 
 This create a set of 00XX-YYY.patch, that you can have a look at, one by one, and apply
 them in the arch directories.
+
+git tag -f lastcrouton crouton/master
+git push -f origin lastcrouton
+
+git commit --allow-empty -m "Rebase on crouton/`cat .git/refs/tags/lastcrouton`"
+git push -f origin master
 
 ========
 
