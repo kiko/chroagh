@@ -8,6 +8,21 @@ Currently Ubuntu is supported (on x86/ARM, provided I did not break anything
 from the original crouton script). Arch Linux ARM is also supported (Arch
 Linux for x86 could be supported with minimal effort).
 
+Notes on git tree
+-----------------
+This repository is a bit strange, because we constantly rebase on
+[`dnschneid/crouton`](https://github.com/dnschneid/crouton)
+(merging modifications would be even more difficult, as we renamed files and
+`git-merge` is very confused...)...
+
+That means you need to do the following to fetch modifications from the tree:
+
+        git fetch --all
+        git reset --hard origin/master
+
+Be careful, as this will erase any other commit you did in your own `master` branch.
+
+
 Usage
 -----
 
