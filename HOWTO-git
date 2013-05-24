@@ -1,7 +1,14 @@
-This repository is a bit strange, because we constantly rebase on dnschneid/crouton (merging modifications would be even more difficult, as we renamed files and git-merge is very confused...)...
+This repository is a bit strange, because we constantly rebase on dnschneid/crouton
+(merging modifications would be even more difficult, as we renamed files and
+git-merge is very confused...)...
 
-That means "git pull" will not work, you need to "git pull --force".
+That means you need to do the following to fetch modifications from the tree:
+git fetch --all
+git reset --hard origin/master
 
+Be careful, as this will erase any other commit you did in your own master branch.
+
+====
 Rebasing is done as follows (you need to be in the master branch):
 
 git pull origin lastcrouton
