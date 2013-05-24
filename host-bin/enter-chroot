@@ -367,6 +367,13 @@ else
     else
         # Escape out the command
         cmd=''
+        
+        # Archlinux: Workaround for bug in su/bash, where /etc/profile is
+        # not sourced. See: https://bugs.archlinux.org/task/31831
+        if grep -q "ID=arch" "$CHROOT/etc/os-release"; then
+            cmd=". /etc/profile; "
+        fi
+        
         for param in "$@"; do
             cmd="$cmd'`echo -n "$param" | sed "s/'/'\\\\\\''/g"`' "
         done
