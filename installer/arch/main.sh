@@ -106,10 +106,6 @@ while getopts 'a:def:k:m:n:p:P:s:t:T:uV' f; do
 done
 shift "$((OPTIND-1))"
 
-if [ ! "$ARCH" = "armv7h" ]; then
-    error 2 "Only ARM architecture is supported currently (armv7h)"
-fi
-
 # If targets weren't specified, we should just print help text.
 if [ -z "$DOWNLOADONLY" -a -z "$TARGETS" -a -z "$TARGETFILE" ]; then
     error 2 "$USAGE"
