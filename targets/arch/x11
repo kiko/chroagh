@@ -7,8 +7,22 @@ if [ ! "$TARGETS" = 'help' -a ! "${ARCH#arm}" = "$ARCH" ]; then
     TARGET=xephyr
     . "${TARGETSDIR:="$PWD"}/$TARGET"
 fi
+REQUIRES='core'
+DESCRIPTION='Basic X11 install. Does not install any desktop environment.'
+CHROOTBIN='croutonpowerd setres xinit'
+. "${TARGETSDIR:="$PWD"}/common"
 
-echo "x11 target has not been coded on non-ARM architecture for Arch Linux" 1>&2
-exit 2
+### Append to prepare.sh:
+#FIXME: Missing dmz-cursor-theme
+#FIXME: xorg may be installing way too many packages/drivers
+pacman -S xorg --needed --noconfirm
+# Fix launching X11 from inside crosh (user doesn't own a TTY)
+sed -i 's/allowed_users=.*/allowed_users=anybody/' '/etc/X11/Xwrapper.config'
+
+TIPS="$TIPS
+You can switch to your running chroot desktops by hitting Ctrl+Alt+Refresh
+through Ctrl+Alt+VolumeUp (each additional running chroot will be one key to the
+right), and switch back to Chromium OS by hitting Ctrl+Alt+Back.
+"
 
 ### append x11-common

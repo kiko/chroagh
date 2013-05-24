@@ -36,8 +36,6 @@ $APPLICATION arch [options] -d -f tarball
 
 Constructs a Archlinux-based chroot for running alongside Chromium OS.
 
-Only ARM architecture is suppported/tested at this time (Samsung Chromebook ARM).
-
 If run with -f, a tarball is used to bootstrap the chroot. If specified with -d,
 the tarball is created for later use with -f.
 
@@ -243,7 +241,8 @@ trap "$TRAP" INT HUP 0
 
 # Sanity-check the release if we're updating
 if [ -n "$NODOWNLOAD" ] \
-        && ! grep -q "ID=archarm\$" "$CHROOT/etc/os-release" ; then
+        && ! ([ "$ARCH" == 'arm' ] && grep -q "ID=archarm\$" "$CHROOT/etc/os-release") \
+        && ! ([ "$ARCH" != 'arm' ] && grep -q "ID=arch\$" "$CHROOT/etc/os-release"); then
     if [ ! "$UPDATE" = 2 ]; then
         error 1 \
 "Chroot doesn't look like ArchLinux! Please correct the -r option, or specify a second -u to
