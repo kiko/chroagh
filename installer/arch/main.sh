@@ -237,8 +237,8 @@ trap "$TRAP" INT HUP 0
 
 # Sanity-check the release if we're updating
 if [ -n "$NODOWNLOAD" ] \
-        && ! ([ "$ARCH" == 'arm' ] && grep -q "ID=archarm\$" "$CHROOT/etc/os-release") \
-        && ! ([ "$ARCH" != 'arm' ] && grep -q "ID=arch\$" "$CHROOT/etc/os-release"); then
+        && ! ([ "$ARCH" = "armv7h" ] && grep -q "ID=archarm\$" "$CHROOT/etc/os-release") \
+        && ! ([ "$ARCH" != "armv7h" ] && grep -q "ID=arch\$" "$CHROOT/etc/os-release"); then
     if [ ! "$UPDATE" = 2 ]; then
         error 1 \
 "Chroot doesn't look like ArchLinux! Please correct the -r option, or specify a second -u to
