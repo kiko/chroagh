@@ -28,8 +28,8 @@ TARGETS=''
 TARGETFILE=''
 UPDATE=''
 
-USAGE="$APPLICATION [options] -t targets
-$APPLICATION [options] -d -f tarball
+USAGE="$APPLICATION ubuntu [options] -t targets
+$APPLICATION ubuntu [options] -d -f tarball
 
 Constructs a Debian-based chroot for running alongside Chromium OS.
 
