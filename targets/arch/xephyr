@@ -5,7 +5,7 @@
 REQUIRES='core'
 DESCRIPTION='Nested X11 install. Replaces X11 if specified first.'
 CHROOTBIN='croutonpowerd croutonwheel croutonwm xinit'
-CHROOTETC='keylaunchrc-xephyr'
+CHROOTETC='xbindkeysrc-xephyr'
 # Prevent X11 from being added if it hasn't already.
 echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
 . "${TARGETSDIR:="$PWD"}/common"
@@ -15,9 +15,7 @@ echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
 aurcompile mawk
 
 #FIXME: Missing dmz-cursor-theme
-pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput xorg-xinit --needed --noconfirm
-
-aurcompile keylaunch
+pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput xorg-xinit xbindkeys --needed --noconfirm
 
 # Compile croutoncursor
 compile cursor '-lX11 -lXfixes -lXrender' \
