@@ -30,8 +30,8 @@ TARGETS=''
 TARGETFILE=''
 UPDATE=''
 
-USAGE="$APPLICATION [options] -t targets
-$APPLICATION [options] -d -f tarball
+USAGE="$APPLICATION arch [options] -t targets
+$APPLICATION arch [options] -d -f tarball
 
 Constructs a Archlinux-based chroot for running alongside Chromium OS.
 
