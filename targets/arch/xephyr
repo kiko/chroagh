@@ -4,7 +4,7 @@
 # found in the LICENSE file.
 REQUIRES='core'
 DESCRIPTION='Nested X11 install. Replaces X11 if specified first.'
-CHROOTBIN='croutonpowerd croutonwheel croutonwm xinit'
+CHROOTBIN='croutonclip croutonpowerd croutonwheel croutonwm xinit'
 CHROOTETC='xbindkeysrc-xephyr'
 # Prevent X11 from being added if it hasn't already.
 echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
@@ -15,7 +15,8 @@ echo 'x11' >> "${TARGETDEDUPFILE:-/dev/null}"
 aurcompile mawk
 
 #FIXME: Missing dmz-cursor-theme
-pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput xorg-xinit xbindkeys --needed --noconfirm
+pacman -S xorg-server-xephyr ratpoison xorg-utils xorg-server-utils xautomation xdotool xorg-xinput xorg-xinit xbindkeys \
+    xclip openbsd-netcat --needed --noconfirm
 
 # Compile croutoncursor
 compile cursor '-lX11 -lXfixes -lXrender' \
@@ -47,6 +48,11 @@ fi
 TIPS="$TIPS
 You can flip through your running chroot desktops and Chromium OS by hitting
 Ctrl+Alt+Shift+Back and Ctrl+Alt+Shift+Forward.
+"
+
+TIPS="$TIPS
+You probably want to run the crouton-clip application on Chromium OS, so that
+the clipboard can be synchronized between Chromium OS and the chroot desktops.
 "
 
 ### append x11-common
