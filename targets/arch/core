@@ -37,13 +37,15 @@ newenv='/etc/environment.new'
 } > "$newenv"
 mv -f "$newenv" "$oldenv"
 
-if [ ! -e /etc/pacman.d/mirrorlist.croutonorig ]; then
-	cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.croutonorig
-fi
+if [ -n "$MIRROR" ]; then
+    if [ ! -e /etc/pacman.d/mirrorlist.croutonorig ]; then
+	    cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.croutonorig
+    fi
 
-cat > /etc/pacman.d/mirrorlist <<EOF
+    cat > /etc/pacman.d/mirrorlist <<EOF
 Server = $MIRROR
 EOF
+fi
 
 #Remove some useless packages (there are more!)
 pacman -R linux-firmware --noconfirm || true
