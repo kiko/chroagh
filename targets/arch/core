@@ -53,6 +53,14 @@ pacman -R syslog-ng --noconfirm || true
 pacman -R wpa_supplicant --noconfirm || true
 pacman -R netcfg --noconfirm || true
 
+#Initialize pacman keyring (useless for arm)
+if ! uname -m | grep '^arm' && ! pacman-key -l > /dev/null 2>&1; then
+    echo 'Initializing pacman keyring...' 1>&2
+    echo 'Note: If this gets stuck, generate entropy by moving the mouse around (e.g. random browsing).' 1>&2
+    pacman-key --init
+    pacman-key --populate archlinux
+fi
+
 echo 'Ensuring system is up-to-date...' 1>&2
 pacman -Syu
 
