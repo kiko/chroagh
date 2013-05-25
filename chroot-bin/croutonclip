@@ -36,7 +36,7 @@ while read line; do
         id=`echo $name | sed -n 's/^Xephyr on \(:[0-9]\+\.[0-9]\+\).*/\1/p'`
     else
         echo "Cannot parse window type ($line)." 1>&2
-        exit 2
+        exit 0
     fi
     
     if [ "$active" = "+" ]; then
