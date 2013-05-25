@@ -16,6 +16,7 @@ ARCH="`uname -m |  sed -e 's i.86 i686 ;s arm.* armv7h ;'`"
 DOWNLOADONLY=''
 ENCRYPT=''
 KEYFILE=''
+MIRRORSET=''
 MIRROR=''
 REPOS=''
 MIRROR86='http://mirrors.kernel.org/archlinux/$repo/os/$arch' 
@@ -94,7 +95,7 @@ while getopts 'a:def:k:m:n:p:P:s:t:T:uV' f; do
     e) ENCRYPT="${ENCRYPT:-"-"}e";;
     f) TARBALL="$OPTARG";;
     k) KEYFILE="$OPTARG";;
-    m) MIRROR="$OPTARG";;
+    m) MIRRORSET='y'; MIRROR="$OPTARG";;
     n) NAME="$OPTARG";;
     p) PREFIX="`readlink -f "$OPTARG"`";;
     P) PROXY="$OPTARG";;
@@ -412,9 +413,14 @@ fi
 # Ensure that /usr/local/bin and /etc/crouton exist
 mkdir -p "$CHROOT/usr/local/bin" "$CHROOT/etc/crouton"
 
+mirror="$MIRROR"
+if [ -z $MIRRORSET ]; then
+    mirror=''
+fi
+
 # Create the setup script inside the chroot
 echo 'Preparing chroot environment...' 1>&2
-VAREXPAND="s #ARCH $ARCH ;s #MIRROR $MIRROR ;s #PROXY $PROXY ;s #VERSION $VERSION ;"
+VAREXPAND="s #ARCH $ARCH ;s #MIRROR $mirror ;s #PROXY $PROXY ;s #VERSION $VERSION ;"
 sed -e "$VAREXPAND" "$INSTALLERDIR/prepare.sh" > "$CHROOT/prepare.sh"
 # Create a file for target deduplication
 TARGETDEDUPFILE="`mktemp --tmpdir=/tmp "$APPLICATION.XXX"`"
