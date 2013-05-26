@@ -16,8 +16,6 @@ CHROOTBIN='croutonpowerd setres xinit'
 #FIXME: Missing dmz-cursor-theme
 #FIXME: xorg may be installing way too many packages/drivers
 pacman -S xorg --needed --noconfirm
-# Fix launching X11 from inside crosh (user doesn't own a TTY)
-sed -i 's/allowed_users=.*/allowed_users=anybody/' '/etc/X11/Xwrapper.config'
 
 TIPS="$TIPS
 You can switch to your running chroot desktops by hitting Ctrl+Alt+Refresh
