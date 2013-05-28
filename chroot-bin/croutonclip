@@ -1,0 +1,84 @@
+#!/bin/sh
+# Synchronize clipboard on window change
+# Depends on:
+#  - netcat (_patched_ openbsd variant needed for -q option)
+#    FIXME:
+#    This may cause problems with distributions that do not allow both
+#    GNU and OpenBSD netcat to be installed at the same time.
+#    Also there is no easy way of telling which one is installed (nc may be
+#    a link to GNU netcat).
+#    + gawk provides networking and may be a better option.
+#    + bash is also an option
+#    + a simple C app could also do the trick.
+#  - xclip
+# xclip: We use the Ctrl+C/V type of keyboard (not the select/Middle button)
+#
+# FIXME: We might have a race condition if the windows are switched to
+# quickly (this script could run twice in parallel).
+
+VERBOSE=
+
+previous=""
+current=""
+
+# Iterate over each window (ratpoison command at the end of this loop)
+while read line; do
+    if [ -n "$VERBOSE" ]; then
+        echo $line
+    fi
+    active=`echo $line | cut -f 1 -d '#'`
+    name=`echo $line | cut -f 3 -d '#'`
+    
+    id=invalid
+    if echo $name | grep -q "aura_root"; then
+        id=aura
+    elif echo $name | grep -q "Xephyr"; then
+        id=`echo $name | sed -n 's/^Xephyr on \(:[0-9]\+\.[0-9]\+\).*/\1/p'`
+    else
+        echo "Cannot parse window type ($line)." 1>&2
+        exit 0
+    fi
+    
+    if [ "$active" = "+" ]; then
+        previous=$id
+    elif [ "$active" = "*" ]; then
+        current=$id
+    fi
+done << EOF
+$(DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c 'windows %s#%n#%t')
+EOF
+
+if [ -z "$previous" -o -z "$current" ]; then
+    echo "Cannot figure previous or current window ($previous,$current)." 1>&2
+    exit 0
+fi
+
+cliptmp=`mktemp "croutonclip.XXX"`
+trap "rm -f $cliptmp" INT HUP 0
+# Copy clipboard content from previous window
+if [ "$previous" = "aura" ]; then
+    # -q -1 forces netcat to listen to the whole response even though stdin
+    # is closed.
+    if ! echo x | nc -q -1 127.0.0.1 30001 > $cliptmp; then
+        echo "crouton-clip not listening on port 30001." 1>&2
+        exit 0
+    fi
+else
+    DISPLAY=$previous xclip -o -sel clip > $cliptmp
+fi
+
+if [ -n "$VERBOSE" ]; then
+    echo "==Previous: $previous=="
+    cat $cliptmp
+    echo "==Current: $current=="
+fi
+
+# Paste clipboard content to current window
+if [ "$current" = "aura" ]; then
+    (echo -n P; cat $cliptmp) | nc 127.0.0.1 30001
+else
+    cat $cliptmp | DISPLAY=$current xclip -i -sel clip
+fi
+
+exit 0
+
