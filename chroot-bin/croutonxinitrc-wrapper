@@ -50,8 +50,8 @@ croutonpowerd --daemon &
 if [ -r "/etc/X11/host-Xauthority" ]; then
     DISPLAY=':0' XAUTHORITY="/etc/X11/host-Xauthority" croutoncursor "$DISPLAY" &
 
-    ln -sf '/etc/crouton/keylaunchrc-xephyr' "$HOME/.keylaunchrc"
-    keylaunch &
+    ln -sf '/etc/crouton/xbindkeysrc-xephyr' "$HOME/.xbindkeysrc"
+    xbindkeys
 fi
 
 # Launch touchegg if it is requested.

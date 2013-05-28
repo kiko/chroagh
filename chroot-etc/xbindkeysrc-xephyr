@@ -1,0 +1,55 @@
+# For the benefit of emacs users: -*- shell-script -*-
+###########################
+# xbindkeys configuration #
+###########################
+#
+# Version: 1.8.5
+#
+# If you edit this file, do not forget to uncomment any lines
+# that you change.
+# The pound(#) symbol may be used anywhere for comments.
+#
+# To specify a key, you can use 'xbindkeys --key' or
+# 'xbindkeys --multikey' and put one of the two lines in this file.
+#
+# The format of a command line is:
+#    "command to start"
+#       associated key
+#
+#
+# A list of keys is in /usr/include/X11/keysym.h and in
+# /usr/include/X11/keysymdef.h
+# The XK_ is not needed.
+#
+# List of modifier:
+#   Release, Control, Shift, Mod1 (Alt), Mod2 (NumLock),
+#   Mod3 (CapsLock), Mod4, Mod5 (Scroll).
+#
+
+# The release modifier is not a standard X modifier, but you can
+# use it if you want to catch release events instead of press events
+
+# By defaults, xbindkeys does not pay attention with the modifiers
+# NumLock, CapsLock and ScrollLock.
+# Uncomment the lines above if you want to pay attention to them.
+
+#keystate_numlock = enable
+#keystate_capslock = enable
+#keystate_scrolllock= enable
+
+# Replicates ratpoison shortcuts inside of Xephyr for when Xephyr grabs all keys
+"xte 'keyup F1'; env DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c prev"
+  Control + Shift + Alt + F1
+"xte 'keyup F2'; env DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c next"
+  Control + Shift + Alt + F2
+"xte 'keyup Escape'; env DISPLAY=:0 XAUTHORITY=/etc/X11/host-Xauthority ratpoison -c 'readkey root'"
+  Control + Shift + Alt + Escape
+
+# Map Ctrl+click to middle button
+# Map on Release so that it does not appear both buttons are pressed
+"xte 'mouseclick 2'"
+  Control + b:1 + Release
+
+##################################
+# End of xbindkeys configuration #
+##################################
