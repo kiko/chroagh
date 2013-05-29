@@ -361,6 +361,8 @@ if [ -z "$NODOWNLOAD" ] && [ -n "$DOWNLOADONLY" -o -z "$TARBALL" ]; then
     echo "Server = $MIRROR" > "$CHROOT/etc/pacman.d/mirrorlist"
 
     ln -s /usr/lib "$CHROOT/lib"
+    # Link /lib64. Critical on x86_64, harmless on other architectures.
+    ln -s /usr/lib "$CHROOT/lib64"
 
     # We could use pacstrap to install the base packages, but it does not like not being able
     # to do mount --bind (which cannot be done inside the chroot for some reason)
