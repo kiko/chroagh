@@ -64,6 +64,9 @@ fi
 echo 'Ensuring system is up-to-date...' 1>&2
 pacman -Syu
 
+# Ensure /etc/machine-id exists
+systemd-machine-id-setup
+
 # On release upgrade, keyboard-configuration might be reconfigured.
 fixkeyboardmode
 
