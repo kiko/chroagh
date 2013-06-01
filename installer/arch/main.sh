@@ -131,6 +131,9 @@ else
     REPOS="$REPOSARM"
 fi
 
+if [ "${MIRROR#*\$repo}" = "$MIRROR" ]; then
+    error 2 "Mirror does not contain \$repo: you probably forgot to add single quotes (') around the URL ($MIRROR)."
+fi
 
 # Confirm or list targets if requested (and download only isn't chosen)
 if [ -z "$DOWNLOADONLY" ]; then

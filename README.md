@@ -55,7 +55,8 @@ to press Ctrl+D.
 
     (you can specify a mirror by adding
     `-m 'http://tw.mirror.archlinuxarm.org/armv7h/$repo'`: just change the
-    country code from `tw` to somewhere near you)
+    country code from `tw` to somewhere near you. Be careful to keep the single
+    quotes around the mirror URL)
 
      Follow the instructions (press enter anytime you are asked a yes/no
      question). This will take a while, especially if your network is
