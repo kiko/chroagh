@@ -320,13 +320,13 @@ if [ -z "$NODOWNLOAD" ] && [ -n "$DOWNLOADONLY" -o -z "$TARBALL" ]; then
     # Paranoid mode: make sure $FETCHDIR really exists, the trap
     # below could lead to bad results otherwise
     if [ ! -d $FETCHDIR ]; then
-        error 2 "FETCHIR=$FETCHDIR is not a directory"
+        error 2 "FETCHDIR=$FETCHDIR is not a directory"
     fi
 
     # Make sure tmp files are cleaned on on exit
     # Most likely safer than rm -rf $FETCHDIR
     # FIXME: TRAP is executed twice, hence the need to make sure rmdir does not fail
-    TRAP="rm -f $FETCHDIR/*; rmdir $FETCHDIR 2>/dev/null || true; rm -f $LIST;$TRAP"
+    TRAP="rm -f \"$FETCHDIR\"/*; rmdir \"$FETCHDIR\" 2>/dev/null || true; rm -f \"$LIST\";$TRAP"
     trap "$TRAP" INT HUP 0
 
     echo "Fetching repository packages list..."
@@ -334,7 +334,14 @@ if [ -z "$NODOWNLOAD" ] && [ -n "$DOWNLOADONLY" -o -z "$TARBALL" ]; then
     for REPO in $REPOS; do
 	    echo "Fetching $REPO..."
 	    MIRRORBASE=`echo $MIRROR | sed -e "s/\\$repo/$REPO/" -e "s/\\$arch/$ARCH/"`
-            wget -q -O- "$MIRRORBASE" |sed  -n "s|.*href=\"\\([^\"]*\\).*|$MIRRORBASE/\\1|p"|grep -v 'sig$'|uniq >> $LIST  
+	    # Add trailing slash to fix redirect on some mirrors.
+        wget -O"$FETCHDIR/$REPO.list" "$MIRRORBASE"/
+        cat "$FETCHDIR/$REPO.list" |sed  -n "s|.*href=\"\\([^\"]*\\).*|$MIRRORBASE/\\1|p"|grep -v 'sig$'|uniq > "$FETCHDIR/$REPO.pkg"
+        if [ "`cat \"$FETCHDIR/$REPO.pkg\" | wc -l`" -eq 0 ]; then
+            error 2 "Cannot fetch $MIRRORBASE."
+        fi
+        cat "$FETCHDIR/$REPO.pkg" >> $LIST
+        rm "$FETCHDIR/$REPO.list" "$FETCHDIR/$REPO.pkg"
     done
 
     echo "Downloading and extracting packages..."
