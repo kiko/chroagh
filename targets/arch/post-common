@@ -14,6 +14,9 @@ HOSTBIN='enter-chroot delete-chroot edit-chroot mount-chroot unmount-chroot'
 
 ### Append to prepare.sh:
 
+pacman --noconfirm --needed -S sudo
+echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/00-wheel
+
 # Add the primary user
 if ! grep -q ":1000:" /etc/passwd; then
     username=

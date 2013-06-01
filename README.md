@@ -67,53 +67,6 @@ to press Ctrl+D.
   * `sudo startxfce4` to start XFCE in a separate screen (you can switch
     between screens with Ctrl+Alt+Shift+Back or Ctrl+Alt+Shift+Forward)
 
-### Fix sudo (or perform any other operation as root)
-
-`sudo` will not work in the chroot environment by default. You need to set
-it up as follows:
-
-  1. `sudo enter-chroot -u 0`: this launches a bash shell as root
-  2. `nano /etc/sudoers`
-  3. Uncomment this line:
-     `%wheel  ALL=(ALL) ALL`
-     (the user you created is in group `wheel` by default)
-
-### Extract the rootfs
-
-(This is not recommended anymore: chroagh can bootstrap ArchLinux now)
-
-If you want to extract the rootfs from an official ArchLinux image, you
-can follow these steps. This needs to be done on a separate computer, as
-it requires 8GB of free space to extract the image (the image is meant
-to be written on a SD card).
-
-  1. Download and extract the latest ArchLinux ARM image for the chromebook:
-
-        wget http://us.mirror.archlinuxarm.org/os/ArchLinuxARM-chromebook-latest.img.gz
-        gunzip ArchLinuxARM-chromebook-latest.img.gz
-
-  2. Mount the image:
-
-        sudo modprobe loop
-        sudo losetup /dev/loop0 ArchLinuxARM-chromebook-latest.img
-        mkdir rootfs
-        sudo mount /dev/loop0p3 rootfs
-
-  3. Create the rootfs tarball:
-
-        sudo tar pcvfz ArchLinuxARM-chromebook-latest-rootfs.tar.gz rootfs
-
-  4. Umount the image:
-
-        sudo umount rootfs
-        sudo losetup -d /dev/loop0
-
-Transfer `ArchLinuxARM-chromebook-latest-rootfs.tar.gz` to the Chromebook,
-for example using a USB key. Put it in the `Downloads` directory.
-
-The rootfs can then be installed using:
-        sudo sh -e installer/main.sh arch -t xfce -f ../ArchLinuxARM-chromebook-latest-rootfs.tar.gz
-
 Original crouton documentation
 ==============================
 
