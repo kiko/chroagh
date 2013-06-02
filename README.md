@@ -5,23 +5,7 @@ chroagh is a fork of [crouton](https://github.com/dnschneid/crouton), that
 allows you to run another Linux distribution side by side with Chromium OS.
 
 Currently Ubuntu is supported (on x86/ARM, provided I did not break anything
-from the original crouton script). Arch Linux ARM is also supported (Arch
-Linux for x86 could be supported with minimal effort).
-
-Notes on git tree
------------------
-This repository is a bit strange, because we constantly rebase on
-[`dnschneid/crouton`](https://github.com/dnschneid/crouton)
-(merging modifications would be even more difficult, as we renamed files and
-`git-merge` is very confused...)...
-
-That means you need to do the following to fetch modifications from the tree:
-
-        git fetch --all
-        git reset --hard origin/master
-
-Be careful, as this will erase any other commit you did in your own `master` branch.
-
+from the original crouton script). Arch Linux (ARM and x86) is also supported.
 
 Usage
 -----
@@ -67,6 +51,21 @@ to press Ctrl+D.
   * `sudo enter-chroot` to launch a bash shell
   * `sudo startxfce4` to start XFCE in a separate screen (you can switch
     between screens with Ctrl+Alt+Shift+Back or Ctrl+Alt+Shift+Forward)
+
+Notes on git tree
+-----------------
+This repository is a bit strange, because we constantly rebase on
+[`dnschneid/crouton`](https://github.com/dnschneid/crouton)
+(merging modifications would be even more difficult, as we renamed files and
+`git-merge` is very confused...)...
+
+That means you need to do the following to fetch modifications from the tree:
+
+        git fetch --all
+        git reset --hard origin/master
+
+Be careful, as this will erase any other commit you did in your own `master` branch.
+
 
 Original crouton documentation
 ==============================
