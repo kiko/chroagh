@@ -82,7 +82,7 @@ elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
     echo "Server = $MIRROR" > /etc/pacman.d/mirrorlist
     
     #Initialize pacman keyring (useless for arm)
-    if ! uname -m | grep '^arm' && [ `pacman-key -l 2>/dev/null | grep '^pub' | wc -l` -lt 2 ]; then
+    if ! uname -m | grep -q '^arm' && [ `pacman-key -l 2>/dev/null | grep '^pub' | wc -l` -lt 2 ]; then
         echo 'Initializing pacman keyring...' 1>&2
         echo 'Note: If this gets stuck, generate entropy by moving the mouse around (e.g. random browsing).' 1>&2
         pacman-key --init

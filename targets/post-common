@@ -14,11 +14,11 @@ HOSTBIN='enter-chroot delete-chroot edit-chroot mount-chroot unmount-chroot'
 
 ### Append to prepare.sh:
 
-GROUPS="audio,video"
+USERADDGROUPS="audio,video"
 if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
-    GROUPS="$GROUPS,sudo"
+    USERADDGROUPS="$USERADDGROUPS,sudo"
 elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
-    GROUPS="$GROUPS,users,wheel"
+    USERADDGROUPS="$USERADDGROUPS,users,wheel"
     install sudo
     if [ ! -e /etc/sudoers.d/00-wheel ]; then
         echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/00-wheel
@@ -34,7 +34,7 @@ if ! grep -q ':1000:' /etc/passwd; then
         echo -n 'Please specify a username for the primary user: ' 1>&2
         read username junk
     done
-    useradd -u 1000 -G "$GROUPS" -s '/bin/bash' -m "$username"
+    useradd -u 1000 -G "$USERADDGROUPS" -s '/bin/bash' -m "$username"
     tries=0
     while ! passwd "$username" && [ "$tries" -lt 3 ]; do
         tries="$((tries+1))"
