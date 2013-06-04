@@ -1,0 +1,61 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# This is a distro-specific continuation of the prepare.sh script.
+
+PKGEXT='nonsense' #FIXME
+DISTROAKA='arch'
+
+
+# install_dist: see install() in prepare.sh for details.
+# We ignore the second part of the parameters, that are probably Ubuntu-specific
+install_dist() {
+    local pkgs='' params=''
+    if [ "$1" = '--minimal' ]; then
+        params='--no-install-recommends'
+        shift
+    fi
+    while [ ! "$#" = 0 ]; do
+        if [ "$1" = '--' ]; then
+            shift
+            break
+        fi
+        pkgs="$pkgs $1"
+        shift
+    done
+    pacman -S --noconfirm --needed $pkgs
+}
+
+
+# install_pkg_dist: see install_pkg() in prepare.sh for details.
+install_pkg_dist() {
+    error 1 'ERROR: install_pkg_dist makes no sense for Arch'
+}
+
+
+# remove_dist: see remove() in prepare.sh for details.
+remove_dist() {
+    pacman -R --unneeded "$@"
+}
+
+
+# list_uninstalled_dist: see list_uninstalled() in prepare.sh for details.
+list_uninstalled_dist() {
+    local suffix="$1" pkg
+    if [ -n "$suffix" ]; then
+        error 1 'list_uninstalled_dist: Non-empty suffix makes no sense for Arch'
+    fi
+    shift
+    for pkg in "$@"; do
+        if ! dpkg-query -s "$pkg" 2>/dev/null >/dev/null; then
+            echo -n "$pkg "
+        fi
+    done
+}
+
+#FIXME: Here, we should be able to recover the bootstrap
+
+# Fix the keyboard mode early on (this will be called again after dist-upgrade).
+fixkeyboardmode

@@ -74,15 +74,44 @@ EOF
 
     echo 'Ensuring system is up-to-date...' 1>&2
     apt-get -y dist-upgrade
+elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
+    if [ ! -e /etc/pacman.d/mirrorlist.croutonorig ]; then
+        cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.croutonorig
+    fi
+
+    echo "Server = $MIRROR" > /etc/pacman.d/mirrorlist
+    
+    #Initialize pacman keyring (useless for arm)
+    if ! uname -m | grep '^arm' && [ `pacman-key -l 2>/dev/null | grep '^pub' | wc -l` -lt 2 ]; then
+        echo 'Initializing pacman keyring...' 1>&2
+        echo 'Note: If this gets stuck, generate entropy by moving the mouse around (e.g. random browsing).' 1>&2
+        pacman-key --init
+        pacman-key --populate archlinux
+    fi
+
+    echo 'Ensuring system is up-to-date...' 1>&2
+    pacman -Syu
+
+    # Ensure /etc/machine-id exists
+    systemd-machine-id-setup
 fi
 
 # On release upgrade, keyboard-configuration might be reconfigured.
 fixkeyboardmode
 
 # Generate and set default locale
-if [ ! -f '/etc/default/locale' ] && hash locale-gen 2>/dev/null; then
-    locale-gen --lang en_US.UTF-8
-    update-locale LANG=en_US.UTF-8
+if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
+    if [ ! -f '/etc/default/locale' ] && hash locale-gen 2>/dev/null; then
+        locale-gen --lang en_US.UTF-8
+        update-locale LANG=en_US.UTF-8
+    fi
+elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
+    if [ ! -f '/etc/locale.conf' ]; then
+        cp /etc/locale.gen /etc/locale.gen.croutonorig
+        sed -i -e 's/^#en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+        locale-gen
+        echo 'LANG=en_US.UTF-8' > /etc/locale.conf
+    fi
 fi
 
 echo 'Syncing timezone...' 1>&2
