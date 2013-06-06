@@ -13,9 +13,12 @@ CHROOTBIN='croutonpowerd croutonxinitrc-wrapper setres xinit'
 . "${TARGETSDIR:="$PWD"}/common"
 
 ### Append to prepare.sh:
-install xorg dmz-cursor-theme
-# Fix launching X11 from inside crosh (user doesn't own a TTY)
-sed -i 's/allowed_users=.*/allowed_users=anybody/' '/etc/X11/Xwrapper.config'
+install xorg arch=,dmz-cursor-theme arch=ttf-dejavu,
+
+if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
+    # Fix launching X11 from inside crosh (user doesn't own a TTY)
+    sed -i 's/allowed_users=.*/allowed_users=anybody/' '/etc/X11/Xwrapper.config'
+fi
 
 TIPS="$TIPS
 You can switch to your running chroot desktops by hitting Ctrl+Alt+Refresh

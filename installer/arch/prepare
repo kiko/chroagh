@@ -5,14 +5,48 @@
 
 # This is a distro-specific continuation of the prepare.sh script.
 
-PKGEXT='nonsense' #FIXME
+PKGEXT='nonsense'
 DISTROAKA='arch'
 
+# aurcompile: compile package from AUR
+aurcompile() {
+    echo "Compiling $1 from AUR..." 1>&2
+    # Make sure base-devel and wget are installed
+    install base-devel wget
+    # Create a user to do the compilation
+    if ! id aur > /dev/null 2>&1; then
+        useradd aur -r -s /bin/false
+    fi
+    SUDOERSFILE="/etc/sudoers.d/99-aur-pacman"
+    echo "aur ALL = NOPASSWD:/usr/bin/pacman" > "$SUDOERSFILE"
+    PACKAGE=$1
+    PACKAGE2=`echo $PACKAGE | sed -e 's/\(..\).*/\1/'` #FIXME: do this in shell
+    su aur -s /bin/sh -c "
+        set -e
+        PACKAGE='$PACKAGE'
+        PACKAGE2='$PACKAGE2'"'
+        TMPDIR="`mktemp -d --tmpdir=/tmp crouton-aur.XXX`"
+        cd "$TMPDIR"
+        wget "https://aur.archlinux.org/packages/$PACKAGE2/$PACKAGE/$PACKAGE.tar.gz"
+        tar vxf "$PACKAGE.tar.gz"
+        cd "$PACKAGE"
+        pkgver=`sed -n '"'"'s/^pkgver=//p'"'"' PKGBUILD`
+        pkgrel=`sed -n '"'"'s/^pkgrel=//p'"'"' PKGBUILD`
+        if pacman -Q "$PACKAGE" | grep "^$PACKAGE $pkgver-$pkgrel\$"; then
+            echo "Package $PACKAGE already up to date ($pkgver-$pkgrel)."
+        else
+            makepkg -A -s -i --noconfirm
+        fi'
+    #FIXME: These 2 lines should be in traps
+    rm -rf "$TMPDIR"
+    rm "$SUDOERSFILE"
+    return 0
+}
 
 # install_dist: see install() in prepare.sh for details.
 # We ignore the second part of the parameters, that are probably Ubuntu-specific
 install_dist() {
-    local pkgs='' params=''
+    local pkgs='' aurpkgs='' params=''
     if [ "$1" = '--minimal' ]; then
         params='--no-install-recommends'
         shift
@@ -22,10 +56,23 @@ install_dist() {
             shift
             break
         fi
-        pkgs="$pkgs $1"
+        aurstrip=${1#aur:}
+        if [ "$aurstrip" = "$1" ]; then
+            pkgs="$pkgs $1"
+        else
+            aurpkgs="$aurpkgs $aurstrip"
+        fi
         shift
     done
-    pacman -S --noconfirm --needed $pkgs
+    if [ -n "$pkgs" ]; then
+        pacman -S --noconfirm --needed $pkgs
+    fi
+    
+    if [ -n "$aurpkgs" ]; then
+        for aurpkg in "$aurpkgs"; do
+            aurcompile $aurpkg
+        done
+    fi
 }
 
 

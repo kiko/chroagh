@@ -81,7 +81,7 @@ elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
 
     echo "Server = $MIRROR" > /etc/pacman.d/mirrorlist
     
-    #Initialize pacman keyring (useless for arm)
+    # Initialize pacman keyring (useless for arm)
     if ! uname -m | grep -q '^arm' && [ `pacman-key -l 2>/dev/null | grep '^pub' | wc -l` -lt 2 ]; then
         echo 'Initializing pacman keyring...' 1>&2
         echo 'Note: If this gets stuck, generate entropy by moving the mouse around (e.g. random browsing).' 1>&2
@@ -90,7 +90,7 @@ elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
     fi
 
     echo 'Ensuring system is up-to-date...' 1>&2
-    pacman -Syu
+    pacman -Syu --noconfirm
 
     # Ensure /etc/machine-id exists
     systemd-machine-id-setup

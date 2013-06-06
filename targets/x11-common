@@ -11,7 +11,8 @@
 compile ticks -lrt
 
 # Install utilities and links for powerd-poking daemon
-install --minimal xprintidle dbus
+# FIXME: arch: libxss misses dependency on xprintidle
+install --minimal arch=libxss, arch=aur:xprintidle,xprintidle dbus
 ln -sf croutonpowerd /usr/local/bin/gnome-screensaver-command
 ln -sf croutonpowerd /usr/local/bin/xscreensaver-command
 
