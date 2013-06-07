@@ -45,6 +45,7 @@ install --minimal \
     arch=,libgl1-mesa-dri \
     arch=xorg-utils,x11-utils arch=xorg-server-utils,x11-xserver-utils \
     xautomation xdotool arch=xorg-xinput,xinput xterm \
+    arch=aur:mawk,mawk \
     arch=aur:keylaunch,keylaunch
 
 # Compile croutoncursor
