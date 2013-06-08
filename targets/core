@@ -90,7 +90,19 @@ elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
     fi
 
     echo 'Ensuring system is up-to-date...' 1>&2
-    pacman -Syu --noconfirm
+    ret=0
+    pacman -Syu --noconfirm || ret=$?
+    if [ ! "$ret" = 0 ]; then
+        cat <<END
+Cannot upgrade the system automatically, you may want to run the installer
+command again, to make sure it is not a transient error. If there is no obvious
+network error, you should look on http://www.archlinux.org for upgrades
+requiring manual intervention, then enter the chroot as root with:
+ $ sudo enter-chroot -n NAME -u 0
+and follow the instructions on Arch Linux website.
+END
+        exit $?
+    fi
 fi
 
 # On release upgrade, keyboard-configuration might be reconfigured.
