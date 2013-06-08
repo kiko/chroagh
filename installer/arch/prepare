@@ -12,6 +12,8 @@ DISTROAKA='arch'
 aurcompile() {
     echo "Compiling $1 from AUR..." 1>&2
     # Make sure base-devel and wget are installed
+    # FIXME: If we want to keep with the crouton spirit, we should try to
+    # remove base-devel later on...
     install base-devel wget
     # Create a user to do the compilation
     if ! id aur > /dev/null 2>&1; then
@@ -69,7 +71,7 @@ install_dist() {
     fi
     
     if [ -n "$aurpkgs" ]; then
-        for aurpkg in "$aurpkgs"; do
+        for aurpkg in $aurpkgs; do
             aurcompile $aurpkg
         done
     fi

@@ -19,7 +19,7 @@ if [ "$RELEASE" = 'precise' -o "$RELEASE" = 'quantal' ]; then
     install_pkg --minimal "$deb"
     rm -f "$deb"
 else
-    install --minimal touchegg
+    install --minimal arch=aur:frame, arch=aur:grail, arch=aur:geis, arch=aur:touchegg,touchegg
 fi
 
 # The global config file.
