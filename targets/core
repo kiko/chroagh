@@ -91,9 +91,6 @@ elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
 
     echo 'Ensuring system is up-to-date...' 1>&2
     pacman -Syu --noconfirm
-
-    # Ensure /etc/machine-id exists
-    systemd-machine-id-setup
 fi
 
 # On release upgrade, keyboard-configuration might be reconfigured.

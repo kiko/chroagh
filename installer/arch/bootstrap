@@ -21,7 +21,8 @@ fi
 # Packages to install in the bootstrap chroot
 PACKAGES_BOOTSTRAP="acl attr bzip2 curl expat glibc gpgme libarchive libassuan \
 libgpg-error libssh2 openssl pacman xz zlib pacman-mirrorlist coreutils bash \
-grep gawk file tar ncurses readline libcap util-linux pcre gcc-libs lzo2"
+grep gawk file tar ncurses readline libcap util-linux pcre gcc-libs lzo2 \
+arch-install-scripts"
 
 # Packages to install in the target 
 PACKAGES_TARGET="bash bzip2 coreutils cryptsetup diffutils file filesystem \
@@ -86,37 +87,23 @@ ln -s /usr/lib "$BOOTSTRAPCHROOT/lib"
 # Link /lib64. Critical on x86_64, harmless on other architectures.
 ln -s /usr/lib "$BOOTSTRAPCHROOT/lib64"
 
-# We could use pacstrap to install the base packages, but it does not like not
-# being able to do mount --bind (which cannot be done inside the chroot for
-# some reason)
+# Link /bin and /sbin to /usr/bin for recent systems
+ln -s /usr/bin "$BOOTSTRAPCHROOT/bin" 2>/dev/null || true
+ln -s /usr/bin "$BOOTSTRAPCHROOT/sbin"  2>/dev/null || true
 
-NEWCHROOT="$BOOTSTRAPCHROOT/mnt"
-echo "Creating install root at $NEWCHROOT"
-mkdir -m 0755 -p "$NEWCHROOT"/var/cache/pacman/pkg
-mkdir -m 0755 -p "$NEWCHROOT"/var/lib/pacman
-mkdir -m 0755 -p "$NEWCHROOT"/var/log
-mkdir -m 0755 -p "$NEWCHROOT"/dev
-mkdir -m 0755 -p "$NEWCHROOT"/run
-mkdir -m 0755 -p "$NEWCHROOT"/etc
-mkdir -m 1777 -p "$NEWCHROOT"/tmp
-mkdir -m 0555 -p "$NEWCHROOT"/sys
-mkdir -m 0555 -p "$NEWCHROOT"/proc
+mkdir "$BOOTSTRAPCHROOT/mnt"
 
 cp -L /etc/resolv.conf "$BOOTSTRAPCHROOT"/etc/resolv.conf
-LC_ALL=C chroot "$BOOTSTRAPCHROOT" \
-    /usr/bin/pacman -r /mnt -Sy $PACKAGES_TARGET --noconfirm
+LC_ALL=C chroot "$BOOTSTRAPCHROOT" pacstrap -d -M -G /mnt $PACKAGES_TARGET
 
 echo "Swapping content of bootstrap and install root..."
 mkdir -p "$BOOTSTRAPCHROOT"/bootstrap
 for dir in "$BOOTSTRAPCHROOT"/*
 do
     if [ ! $dir = "$BOOTSTRAPCHROOT"/bootstrap ]; then
-	    mv $dir "$BOOTSTRAPCHROOT"/bootstrap
+        mv $dir "$BOOTSTRAPCHROOT"/bootstrap
     fi
 done
 
 mv "$BOOTSTRAPCHROOT"/bootstrap/mnt/* "$BOOTSTRAPCHROOT"
-cp -a "$BOOTSTRAPCHROOT"/bootstrap/etc/pacman.d/mirrorlist \
-    "$BOOTSTRAPCHROOT"/etc/pacman.d/
 rm -rf "$BOOTSTRAPCHROOT"/bootstrap
-
