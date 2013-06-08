@@ -14,7 +14,7 @@ if [ -z "$MIRROR" ]; then
     if [ "$ARCH" = 'x86_64' -o "$ARCH" = 'i686' ]; then
         MIRROR='http://mirrors.kernel.org/archlinux/$repo/os/$arch'
     else
-        MIRRORARM='http://mirror.archlinuxarm.org/armv7h/$repo'
+        MIRROR='http://mirror.archlinuxarm.org/armv7h/$repo'
     fi
 fi
 

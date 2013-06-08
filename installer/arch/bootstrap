@@ -7,10 +7,7 @@
 # has access to all of the variables set by main.sh, namely $tmp (the temporary
 # directory), $INSTALLERDIR/$DISTRO, $RELEASE, $ARCH, and $MIRROR.
 
-#FIXME: This code is not error-safe at all: If any download fails, or if the user
-#       presses Ctrl-C, it will not be able to restart by itself.
-#FIXME: We want to detect dependencies automatically
-#FIXME: Make use of https://github.com/tokland/arch-bootstrap instead?
+# FIXME: We may want to detect dependencies automatically
 
 # This code has been adapted from a script found on the Arch Linux Wiki:
 # https://wiki.archlinux.org/index.php/Install_from_Existing_Linux
@@ -22,13 +19,16 @@ if [ "$ARCH" = 'armv7h' ]; then
 fi
 
 # Packages to install in the bootstrap chroot
-PACKAGES_BOOTSTRAP="acl attr bzip2 curl expat glibc gpgme libarchive libassuan libgpg-error libssh2 openssl pacman xz zlib pacman-mirrorlist coreutils bash grep gawk file tar ncurses readline libcap util-linux pcre gcc-libs lzo2 arch-install-scripts"
+PACKAGES_BOOTSTRAP="acl attr bzip2 curl expat glibc gpgme libarchive libassuan \
+libgpg-error libssh2 openssl pacman xz zlib pacman-mirrorlist coreutils bash \
+grep gawk file tar ncurses readline libcap util-linux pcre gcc-libs lzo2"
 
 # Packages to install in the target 
-PACKAGES_TARGET="bash bzip2 coreutils cryptsetup diffutils file filesystem findutils gawk gcc-libs gettext glibc grep gzip heirloom-mailx inetutils iproute2 iputils less licenses man-db man-pages nano pacman pacman-mirrorlist perl procps-ng psmisc sed shadow sysfsutils tar texinfo usbutils util-linux vi which"
-# Temporarily add libsigsegv (gawk missing dependency)
-# https://github.com/archlinuxarm/PKGBUILDs/issues/438
-PACKAGES_TARGET="$PACKAGES_TARGET libsigsegv"
+PACKAGES_TARGET="bash bzip2 coreutils cryptsetup diffutils file filesystem \
+findutils gawk gcc-libs gettext glibc grep gzip heirloom-mailx inetutils \
+iproute2 iputils less licenses man-db man-pages nano pacman pacman-mirrorlist \
+perl procps-ng psmisc sed shadow sysfsutils tar texinfo usbutils util-linux \
+vi which"
 
 LIST="$tmp/list"
 FETCHDIR="$tmp/packages"
@@ -37,13 +37,15 @@ BOOTSTRAPCHROOT="$tmp/$subdir"
 mkdir "$FETCHDIR" "$BOOTSTRAPCHROOT"
 
 echo "Fetching repository packages list..."
-# Create a list with urls for the arch packages
+# Create a list of URLs for each Arch package
 for REPO in $REPOS; do
     echo "Fetching $REPO..."
-    MIRRORBASE=`echo $MIRROR | sed -e "s/\\$repo/$REPO/" -e "s/\\$arch/$ARCH/"`
+    MIRRORBASE="`echo $MIRROR | sed -e "s/\\$repo/$REPO/" -e "s/\\$arch/$ARCH/"`"
     # Add trailing slash to fix redirect on some mirrors.
-    wget -O"$FETCHDIR/$REPO.list" "$MIRRORBASE"/
-    cat "$FETCHDIR/$REPO.list" |sed  -n "s|.*href=\"\\([^\"]*\\).*|$MIRRORBASE/\\1|p"|grep -v 'sig$'|uniq > "$FETCHDIR/$REPO.pkg"
+    wget -O "$FETCHDIR/$REPO.list" "$MIRRORBASE"/
+    cat "$FETCHDIR/$REPO.list" \
+        | sed -n "s|.*href=\"\\([^\"]*\\).*|$MIRRORBASE/\\1|p" \
+        | grep -v 'sig$' | uniq > "$FETCHDIR/$REPO.pkg"
     if [ "`cat \"$FETCHDIR/$REPO.pkg\" | wc -l`" -eq 0 ]; then
         error 2 "Cannot fetch $MIRRORBASE."
     fi
@@ -52,37 +54,41 @@ for REPO in $REPOS; do
 done
 
 echo "Downloading and extracting packages..."
-# Download and extract each package.
 for PACKAGE in $PACKAGES_BOOTSTRAP; do
-    URL=`grep "$PACKAGE-[0-9]" $LIST|head -n1`
+    URL="`grep "$PACKAGE-[0-9]" $LIST | head -n1`"
     if [ -z "$URL" ]; then
         error 2 "Cannot find package $PACKAGE"
     fi
-    FILE=`echo $URL|sed 's/.*\/\([^\/][^\/]*\)$/\1/'`
+    FILE="`echo $URL | sed 's/.*\/\([^\/][^\/]*\)$/\1/'`"
     wget "$URL" -c -O "$FETCHDIR/$FILE" 
     tar xfk "$FETCHDIR/$FILE" -C "$BOOTSTRAPCHROOT"
 done
         
-# Copy packages tarballs for faster installation
+# Copy package tarballs for faster 2nd stage installation
 mkdir -p "$BOOTSTRAPCHROOT/var/cache/pacman/pkg"
 mv $FETCHDIR/* $BOOTSTRAPCHROOT/var/cache/pacman/pkg
 
-# Hash for empty password  Created by doing: openssl passwd -1 -salt ihlrowCo and entering an empty password (just press enter)
-echo 'root:$1$ihlrowCo$sF0HjA9E8up9DYs258uDQ0:10063:0:99999:7:::' > "$BOOTSTRAPCHROOT/etc/shadow"
+# Hash for empty password, created by doing:
+# $ openssl passwd -1 -salt ihlrowCo and entering an empty password
+echo 'root:$1$ihlrowCo$sF0HjA9E8up9DYs258uDQ0:10063:0:99999:7:::' \
+    > "$BOOTSTRAPCHROOT/etc/shadow"
 echo "root:x:0:0:root:/root:/bin/bash" > "$BOOTSTRAPCHROOT/etc/passwd" 
 touch "$BOOTSTRAPCHROOT/etc/group"
 echo "archbootstrap" > "$BOOTSTRAPCHROOT/etc/hostname"
-test -e "$BOOTSTRAPCHROOT/etc/mtab" || echo "rootfs / rootfs rw 0 0" > "$BOOTSTRAPCHROOT/etc/mtab"
+test -e "$BOOTSTRAPCHROOT/etc/mtab" || echo "rootfs / rootfs rw 0 0" \
+    > "$BOOTSTRAPCHROOT/etc/mtab"
 sed -ni '/^[ \t]*CheckSpace/ !p' "$BOOTSTRAPCHROOT/etc/pacman.conf"
-sed -i "s/^[ \t]*SigLevel[ \t].*/SigLevel = Never/" "$BOOTSTRAPCHROOT/etc/pacman.conf"
+sed -i 's/^[ \t]*SigLevel[ \t].*/SigLevel = Never/' \
+    "$BOOTSTRAPCHROOT/etc/pacman.conf"
 echo "Server = $MIRROR" > "$BOOTSTRAPCHROOT/etc/pacman.d/mirrorlist"
 
 ln -s /usr/lib "$BOOTSTRAPCHROOT/lib"
 # Link /lib64. Critical on x86_64, harmless on other architectures.
 ln -s /usr/lib "$BOOTSTRAPCHROOT/lib64"
 
-# We could use pacstrap to install the base packages, but it does not like not being able
-# to do mount --bind (which cannot be done inside the chroot for some reason)
+# We could use pacstrap to install the base packages, but it does not like not
+# being able to do mount --bind (which cannot be done inside the chroot for
+# some reason)
 
 NEWCHROOT="$BOOTSTRAPCHROOT/mnt"
 echo "Creating install root at $NEWCHROOT"
@@ -97,7 +103,8 @@ mkdir -m 0555 -p "$NEWCHROOT"/sys
 mkdir -m 0555 -p "$NEWCHROOT"/proc
 
 cp -L /etc/resolv.conf "$BOOTSTRAPCHROOT"/etc/resolv.conf
-LC_ALL=C chroot "$BOOTSTRAPCHROOT" /usr/bin/pacman -r /mnt -Sy $PACKAGES_TARGET --noconfirm
+LC_ALL=C chroot "$BOOTSTRAPCHROOT" \
+    /usr/bin/pacman -r /mnt -Sy $PACKAGES_TARGET --noconfirm
 
 echo "Swapping content of bootstrap and install root..."
 mkdir -p "$BOOTSTRAPCHROOT"/bootstrap
@@ -109,6 +116,7 @@ do
 done
 
 mv "$BOOTSTRAPCHROOT"/bootstrap/mnt/* "$BOOTSTRAPCHROOT"
-cp -a "$BOOTSTRAPCHROOT"/bootstrap/etc/pacman.d/mirrorlist "$BOOTSTRAPCHROOT"/etc/pacman.d/
+cp -a "$BOOTSTRAPCHROOT"/bootstrap/etc/pacman.d/mirrorlist \
+    "$BOOTSTRAPCHROOT"/etc/pacman.d/
 rm -rf "$BOOTSTRAPCHROOT"/bootstrap
 

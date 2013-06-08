@@ -5,7 +5,7 @@
 
 # This is a distro-specific continuation of the prepare.sh script.
 
-PKGEXT='nonsense'
+PKGEXT='tar.xz'
 DISTROAKA='arch'
 
 # aurcompile: compile package from AUR
@@ -21,13 +21,15 @@ aurcompile() {
     fi
     SUDOERSFILE="/etc/sudoers.d/99-aur-pacman"
     echo "aur ALL = NOPASSWD:/usr/bin/pacman" > "$SUDOERSFILE"
-    PACKAGE=$1
-    PACKAGE2=`echo $PACKAGE | sed -e 's/\(..\).*/\1/'` #FIXME: do this in shell
+    TRAP="rm -f '$SUDOERSFILE';$TRAP"
+    trap "$TRAP" INT HUP 0
     su aur -s /bin/sh -c "
         set -e
-        PACKAGE='$PACKAGE'
-        PACKAGE2='$PACKAGE2'"'
+        PACKAGE='$1'"'
+        PACKAGE2="${PACKAGE%"${PACKAGE#??}"}"
         TMPDIR="`mktemp -d --tmpdir=/tmp crouton-aur.XXX`"
+        TRAP="rm -rf '"'"'$TMPDIR'"'"';$TRAP"
+        trap "$TRAP" INT HUP 0
         cd "$TMPDIR"
         wget "https://aur.archlinux.org/packages/$PACKAGE2/$PACKAGE/$PACKAGE.tar.gz"
         tar vxf "$PACKAGE.tar.gz"
@@ -39,14 +41,12 @@ aurcompile() {
         else
             makepkg -A -s -i --noconfirm
         fi'
-    #FIXME: These 2 lines should be in traps
-    rm -rf "$TMPDIR"
-    rm "$SUDOERSFILE"
+    rm -f "$SUDOERSFILE"
     return 0
 }
 
 # install_dist: see install() in prepare.sh for details.
-# We ignore the second part of the parameters, that are probably Ubuntu-specific
+# We ignore the second part of the parameters, as Arch only pulls required deps.
 install_dist() {
     local pkgs='' aurpkgs='' params=''
     if [ "$1" = '--minimal' ]; then
@@ -80,7 +80,7 @@ install_dist() {
 
 # install_pkg_dist: see install_pkg() in prepare.sh for details.
 install_pkg_dist() {
-    error 1 'ERROR: install_pkg_dist makes no sense for Arch'
+    error 1 'ERROR: install_pkg_dist is not supported on Arch'
 }
 
 
@@ -94,7 +94,7 @@ remove_dist() {
 list_uninstalled_dist() {
     local suffix="$1" pkg
     if [ -n "$suffix" ]; then
-        error 1 'list_uninstalled_dist: Non-empty suffix makes no sense for Arch'
+        error 1 'list_uninstalled_dist: suffix makes no sense on Arch'
     fi
     shift
     for pkg in "$@"; do
@@ -103,8 +103,6 @@ list_uninstalled_dist() {
         fi
     done
 }
-
-#FIXME: Here, we should be able to recover the bootstrap
 
 # Fix the keyboard mode early on (this will be called again after dist-upgrade).
 fixkeyboardmode

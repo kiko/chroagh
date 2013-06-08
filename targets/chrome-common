@@ -19,8 +19,8 @@ echo 'chromium' >> "${TARGETDEDUPFILE:-/dev/null}"
 . "${TARGETSDIR:="$PWD"}/common"
 
 ### Append to prepare.sh:
-# FIXME: untested
 if [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
+    # FIXME: untested
     channel="-$CHANNEL"
     if [ "$CHANNEL" = "stable" ]; then
         channel=""
