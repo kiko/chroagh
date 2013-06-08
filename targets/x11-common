@@ -7,22 +7,6 @@
 # forms of X11.
 
 ### Append to prepare.sh:
-if [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
-    # Add /usr/local/bin to ENV_PATH in /etc/login.defs (necessary for host
-    # startxfce4 to work)
-    # The root cause is actually a bug in su/bash, where /etc/profile is not
-    # sourced from su, even when the '-' parameter is passed.
-    # See: https://bugs.archlinux.org/task/31831
-    # This probably affects other distributions as well, but in Ubuntu
-    # /etc/login.defs contains /usr/local/bin and startxfce4 then works fine. 
-    if ! grep -q -e '^ENV_PATH[ \t]*PATH=/usr/local/bin:' /etc/login.defs; then
-        if [ ! -e /etc/login.defs.croutonorig ]; then
-	        cp /etc/login.defs /etc/login.defs.croutonorig
-        fi
-        sed -i -e "s|^\(ENV_PATH[ \t]*PATH=\)\(.*\)$|\1/usr/local/bin:\2|" /etc/login.defs
-    fi
-fi     
-
 # Generate the executable that outputs the equivalent of base::TimeTicks::Now()
 compile ticks -lrt
 
