@@ -3,14 +3,15 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# Usage: prepare.sh arch mirror distro release proxy version
-ARCH="${1:-"#ARCH"}"
+# Usage: prepare.sh arch mirror mirrorset distro release proxy version
+ARCH="${1:-"#ARCH#"}"
 # MIRROR may contain variables (e.g., $repo): make sure we do not expand it
-MIRROR=${2:-'#MIRROR'}
-DISTRO="${3:-"#DISTRO"}"
-RELEASE="${4:-"#RELEASE"}"
-PROXY="${5:-"#PROXY"}"
-VERSION="${6:-"#VERSION"}"
+MIRROR=${2:-'#MIRROR#'}
+MIRRORSET="${3:-"#MIRRORSET#"}"
+DISTRO="${4:-"#DISTRO#"}"
+RELEASE="${5:-"#RELEASE#"}"
+PROXY="${6:-"#PROXY#"}"
+VERSION="${7:-"#VERSION#"}"
 
 # We need all paths to do administrative things
 export PATH='/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin'

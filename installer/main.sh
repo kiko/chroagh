@@ -19,6 +19,7 @@ DOWNLOADONLY=''
 ENCRYPT=''
 KEYFILE=''
 MIRROR=''
+MIRRORSET=''
 NAME=''
 PREFIX='/usr/local'
 PROXY='unspecified'
@@ -55,6 +56,9 @@ Options:
                 first encryption, or auto-detected on existing chroots.
     -m MIRROR   Mirror to use for bootstrapping and apt-get.
                 Default depends on the release chosen.
+                During updates (-u), the current mirror is not updated if this
+                parameter is unspecified, and specifying an empty string resets 
+                the mirror to the release default. 
     -n NAME     Name of the chroot. Default is the release name.
     -p PREFIX   The root directory in which to install the bin and chroot
                 subdirectories and data. Default: $PREFIX
@@ -90,7 +94,7 @@ while getopts 'a:def:k:m:n:p:P:r:s:t:T:uV' f; do
     e) ENCRYPT="${ENCRYPT:-"-"}e";;
     f) TARBALL="$OPTARG";;
     k) KEYFILE="$OPTARG";;
-    m) MIRROR="$OPTARG";;
+    m) MIRRORSET='y'; MIRROR="$OPTARG";;
     n) NAME="$OPTARG";;
     p) PREFIX="`readlink -f "$OPTARG"`";;
     P) PROXY="$OPTARG";;
@@ -388,9 +392,9 @@ mkdir -p "$CHROOT/usr/local/bin" "$CHROOT/etc/crouton"
 
 # Create the setup script inside the chroot
 echo 'Preparing chroot environment...' 1>&2
-VAREXPAND="s #ARCH $ARCH ;s #MIRROR $MIRROR ;"
-VAREXPAND="${VAREXPAND}s #DISTRO $DISTRO ;s #RELEASE $RELEASE ;"
-VAREXPAND="${VAREXPAND}s #PROXY $PROXY ;s #VERSION $VERSION ;"
+VAREXPAND="s #ARCH# $ARCH ;s #MIRROR# $MIRROR ;s #MIRRORSET# $MIRRORSET ;"
+VAREXPAND="${VAREXPAND}s #DISTRO# $DISTRO ;s #RELEASE# $RELEASE ;"
+VAREXPAND="${VAREXPAND}s #PROXY# $PROXY ;s #VERSION# $VERSION ;"
 installscript "$INSTALLERDIR/prepare.sh" "$CHROOT/prepare.sh" "$VAREXPAND"
 # Append the distro-specific prepare.sh
 cat "$DISTRODIR/prepare" >> "$CHROOT/prepare.sh"
