@@ -62,17 +62,50 @@ list_uninstalled_dist() {
 
 # Run debootstrap second stage if it hasn't already happened
 if [ -r /debootstrap ]; then
-    # Debootstrap doesn't like anything mounted under /sys or /var when it runs
-    # We assume that the chroot will be unmounted after this script is over, so
-    # we don't need to explicitly remount anything. We also can't detect the
-    # mounts properly due to the chroot, so we have to hardcode the mounts.
-    umount '/sys/fs/fuse/connections' '/var/run/lock' '/var/run'
-    # Our custom /etc/resolv.conf link gets clobbered after bootstrap; save it
-    mv -f /etc/resolv.conf /etc/resolv.conf.save
-    # Start the bootstrap
-    /debootstrap/debootstrap --second-stage
-    # Fix the /etc/resolv.conf
-    mv -f /etc/resolv.conf.save /etc/resolv.conf
+    # In the unlikely case where deboostrap completes, but the rest of this
+    # "if" block fails or gets interrupted, /debootstrap will still be present
+    # (since we use --keep-debootstrap-dir), but /debootstrap/debootstrap will
+    # have removed the exec mode from itelf.
+    # In that case, it is not necessary to run debootstrap again.
+    if [ -x /debootstrap/debootstrap ]; then
+        # Debootstrap doesn't like anything mounted under /sys or /var when it
+        # runs. We assume that the chroot will be unmounted after this script
+        # is over, so we don't need to explicitly remount anything. We also
+        # can't detect the mounts properly due to the chroot, so we have to
+        # hardcode the mounts.
+        umount '/sys/fs/fuse/connections' '/var/run/lock' '/var/run'
+        # Our custom /etc/resolv.conf link gets clobbered after bootstrap; save it
+        mv -f /etc/resolv.conf /etc/resolv.conf.save
+        # Start the bootstrap
+        /debootstrap/debootstrap --second-stage --keep-debootstrap-dir
+        # Fix the /etc/resolv.conf
+        mv -f /etc/resolv.conf.save /etc/resolv.conf
+    fi
+
+    # Setup sources.list
+    if [ "$DISTRO" = 'ubuntu' ]; then
+        cat > /etc/apt/sources.list <<EOF
+deb $MIRROR $RELEASE main restricted universe multiverse
+deb-src $MIRROR $RELEASE main restricted universe multiverse
+deb $MIRROR $RELEASE-updates main restricted universe multiverse
+deb-src $MIRROR $RELEASE-updates main restricted universe multiverse
+deb $MIRROR $RELEASE-security main restricted universe multiverse
+deb-src $MIRROR $RELEASE-security main restricted universe multiverse
+EOF
+    else
+        cat > /etc/apt/sources.list <<EOF
+deb $MIRROR $RELEASE main contrib
+deb-src $MIRROR $RELEASE main contrib
+EOF
+        if [ "$RELEASE" != 'sid' ]; then
+            cat >> /etc/apt/sources.list <<EOF
+deb $MIRROR $RELEASE-updates main contrib
+deb-src $MIRROR $RELEASE-updates main contrib
+EOF
+        fi
+    fi
+
+    rm -rf /debootstrap
 else
     # Do any pending configuration, in case of an unfortunately-timed Ctrl-C
     dpkg --configure -a
