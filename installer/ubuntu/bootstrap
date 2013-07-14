@@ -44,3 +44,29 @@ echo 'Downloading bootstrap files...' 1>&2
 PATH="$newpath" DEBOOTSTRAP_DIR="$tmp" $FAKEROOT \
     "$tmp/debootstrap" --foreign --arch="$ARCH" "$RELEASE" \
                        "$tmp/$subdir" "$MIRROR" 1>&2
+
+# Run the second stage
+LC_ALL=C chroot "$tmp/$subdir" /debootstrap/debootstrap --second-stage 1>&2
+
+# Setup sources.list
+if [ "$DISTRO" = 'ubuntu' ]; then
+    cat > "$tmp/$subdir/etc/apt/sources.list" <<EOF
+deb $MIRROR $RELEASE main restricted universe multiverse
+deb-src $MIRROR $RELEASE main restricted universe multiverse
+deb $MIRROR $RELEASE-updates main restricted universe multiverse
+deb-src $MIRROR $RELEASE-updates main restricted universe multiverse
+deb $MIRROR $RELEASE-security main restricted universe multiverse
+deb-src $MIRROR $RELEASE-security main restricted universe multiverse
+EOF
+else
+    cat > "$tmp/$subdir/etc/apt/sources.list" <<EOF
+deb $MIRROR $RELEASE main contrib
+deb-src $MIRROR $RELEASE main contrib
+EOF
+    if [ "$RELEASE" != 'sid' ]; then
+        cat >> "$tmp/$subdir/etc/apt/sources.list" <<EOF
+deb $MIRROR $RELEASE-updates main contrib
+deb-src $MIRROR $RELEASE-updates main contrib
+EOF
+    fi
+fi

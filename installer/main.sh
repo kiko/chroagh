@@ -49,12 +49,14 @@ Options:
     -e          Encrypt the chroot with ecryptfs using a passphrase.
                 If specified twice, prompt to change the encryption passphrase.
     -f TARBALL  The tarball to use, or download to in the case of -d.
-                When using a prebuilt tarball, -a and -r are ignored.
+                When using a prebuilt tarball, -a, -r and -m are ignored.
     -k KEYFILE  File or directory to store the (encrypted) encryption keys in.
                 If unspecified, the keys will be stored in the chroot if doing a
                 first encryption, or auto-detected on existing chroots.
     -m MIRROR   Mirror to use for bootstrapping and apt-get.
                 Default depends on the release chosen.
+                Can only be specified on bootstrapping: afterwards, the mirror
+                can be changed using methods specific to the distribution.
     -n NAME     Name of the chroot. Default is the release name.
     -p PREFIX   The root directory in which to install the bin and chroot
                 subdirectories and data. Default: $PREFIX
@@ -107,6 +109,11 @@ shift "$((OPTIND-1))"
 # If targets weren't specified, we should just print help text.
 if [ -z "$DOWNLOADONLY" -a -z "$TARGETS" -a -z "$TARGETFILE" \
         -a ! "$RELEASE" = 'list' -a ! "$RELEASE" = 'help' ]; then
+    error 2 "$USAGE"
+fi
+
+# Mirror cannot be specified on update
+if [ -n "$MIRROR" -a -n "$UPDATE" ]; then
     error 2 "$USAGE"
 fi
 
@@ -388,12 +395,14 @@ mkdir -p "$CHROOT/usr/local/bin" "$CHROOT/etc/crouton"
 
 # Create the setup script inside the chroot
 echo 'Preparing chroot environment...' 1>&2
-VAREXPAND="s #ARCH $ARCH ;s #MIRROR $MIRROR ;"
+VAREXPAND="s #ARCH $ARCH ;"
 VAREXPAND="${VAREXPAND}s #DISTRO $DISTRO ;s #RELEASE $RELEASE ;"
 VAREXPAND="${VAREXPAND}s #PROXY $PROXY ;s #VERSION $VERSION ;"
 installscript "$INSTALLERDIR/prepare.sh" "$CHROOT/prepare.sh" "$VAREXPAND"
 # Append the distro-specific prepare.sh
 cat "$DISTRODIR/prepare" >> "$CHROOT/prepare.sh"
+# Append the distro-specific defaults
+cat "$DISTRODIR/defaults" >> "$CHROOT/prepare.sh"
 # Create a file for target deduplication
 TARGETDEDUPFILE="`mktemp --tmpdir=/tmp "$APPLICATION.XXX"`"
 rmtargetdedupfile="rm -f '$TARGETDEDUPFILE'"

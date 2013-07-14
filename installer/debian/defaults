@@ -3,7 +3,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# This file is sourced from main.sh to update distro-specific defaults.
+# This file is sourced from main.sh, and appended to the prepare script
+# after $DISTRO/prepare, to update distro-specific defaults.
 # It must set at least ARCH and MIRROR if not already specified.
 
 if [ -z "$ARCH" ]; then

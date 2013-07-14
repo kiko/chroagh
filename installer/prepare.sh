@@ -5,12 +5,10 @@
 
 # Usage: prepare.sh arch mirror distro release proxy version
 ARCH="${1:-"#ARCH"}"
-# MIRROR may contain variables (e.g., $repo): make sure we do not expand it
-MIRROR=${2:-'#MIRROR'}
-DISTRO="${3:-"#DISTRO"}"
-RELEASE="${4:-"#RELEASE"}"
-PROXY="${5:-"#PROXY"}"
-VERSION="${6:-"#VERSION"}"
+DISTRO="${2:-"#DISTRO"}"
+RELEASE="${3:-"#RELEASE"}"
+PROXY="${4:-"#PROXY"}"
+VERSION="${5:-"#VERSION"}"
 
 # We need all paths to do administrative things
 export PATH='/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin'
@@ -183,7 +181,6 @@ compile() {
 # All distro-specific prepare.sh scripts must define the install_dist,
 # install_pkg_dist, remove_dist, and list_uninstalled_dist functions.
 # They must also set PKGEXT and DISTROAKA.
-# Finally, they must do whatever distro-specific bootstrapping is necessary.
 
 # Note that we install targets before adding the user, since targets may affect
 # /etc/skel or other default parts. The user is added in post-common, which is
