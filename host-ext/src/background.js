@@ -2,18 +2,41 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-var DEBUG = false; //FIXME: Implement
+var DEBUG = true;
 var URL = "ws://localhost:30001/";
 var VERSION = "0";
 
 var clipboardholder_;
-//var logger_; //FIXME: Implement
 var websocket_;
 
 var error_ = false;
 
+var status_ = "";
+var errortext_ = "";
+var logger_ = [];
+
+function setStatus(status, online) {
+    chrome.browserAction.setIcon({path: online ? "icon-online.png" : "icon-offline.png"});
+
+    status_ = status;
+    refreshPopup();
+}
+
+refreshPopup = function() {
+    var views = chrome.extension.getViews({type: "popup"});
+    for (var i = 0; i < views.length; views++) {
+        var info = views[i].document.getElementById("info");
+        if (info) info.textContent = status_;
+        var error = views[i].document.getElementById("error");
+        if (error) error.textContent = errortext_;
+        var logger = views[i].document.getElementById("logger");
+        if (logger) logger.textContent = logger_.join('\n');
+    }
+}
+
 function clipboardStart() {
     printDebug("Crouton extension running!");
+    setStatus("Started...", false);
 
     clipboardholder_ = document.getElementById("clipboardholder");
 
@@ -22,6 +45,8 @@ function clipboardStart() {
 
 function websocketConnect() {
     printDebug("Opening a web socket");
+    setStatus("Connecting...", false);
+    errortext_ = "";
     websocket_ = new WebSocket(URL);
     websocket_.onopen = websocketOpen;
     websocket_.onmessage = websocketMessage;
@@ -30,6 +55,7 @@ function websocketConnect() {
 
 function websocketOpen() {
     printDebug("Connection established.");
+    setStatus("Connection established", true);
     websocket_.send("V"); /* Request version */
 }
 
@@ -68,10 +94,12 @@ function websocketMessage(evt) {
 
 function websocketClose() {
     if (!error_) {
+        setStatus("No connection (retrying in 5 seconds)", false);
         printDebug("Connection is closed, try again in 5 seconds...");
         /* Retry in 5 seconds */
         setTimeout(websocketConnect, 5000);
     } else {
+        setStatus("No connection (error: not retrying).", false);
         printDebug("Connection is closed after an error, not retrying.");
     }
 }
@@ -79,7 +107,11 @@ function websocketClose() {
 function printDebug(str) {
     console.log(str);
     if (DEBUG) {
-        //logger_.textContent += str + "\n";
+        logger_.unshift(str);
+        if (logger_.length > 20) {
+            logger_.pop();
+        }
+        refreshPopup();
     }
 }
 
@@ -87,6 +119,8 @@ function printError(str) {
     // FIXME: Do something better
     console.log(str);
     error_ = true;
+    errortext_ = str;
+    refreshPopup();
     websocket_.close();
 }
 

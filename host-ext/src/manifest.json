@@ -2,11 +2,11 @@
   "manifest_version": 2,
 
   "name": "Crouton clipboard sync",
-  "description": "This extension syncs between clipboard between crouton and Chromimum OS",
+  "description": "This extension syncs between clipboard between crouton and Chromium OS",
   "version": "1.0",
 
   "browser_action": {
-    "default_icon": "icon.png",
+    "default_icon": "icon-offline.png",
     "default_popup": "popup.html"
   },
   "background": {
