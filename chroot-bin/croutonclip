@@ -1,0 +1,92 @@
+#!/bin/sh
+
+VERBOSE='1'
+
+previous=''
+current=''
+cliptmp="`mktemp "croutonclip.XXX"`"
+trap "rm -f $cliptmp" INT HUP 0
+
+copyclip() {
+    previous="$current"
+    current="$1"
+    
+    if [ -z "$previous" -o "$previous" = "$current" ]; then
+        return 0
+    fi
+
+    if [ "$previous" = ":0" ]; then
+        echo -n R > /tmp/crouton-websocket-in
+        # FIXME: error checking?
+        tail -c +2 /tmp/crouton-websocket-out > "$cliptmp"
+    else
+        DISPLAY="$previous" xclip -o -sel clip > "$cliptmp"
+    fi
+
+    if [ -n "$VERBOSE" ]; then
+        echo "==Previous: $previous=="
+        cat "$cliptmp"
+        echo "==Current: $current=="
+    fi
+
+    # Paste clipboard content to current window
+    if [ "$current" = ":0" ]; then
+        (echo -n W; cat "$cliptmp") > /tmp/crouton-websocket-in
+        cat /tmp/crouton-websocket-out > /dev/null
+    else
+        cat "$cliptmp" | DISPLAY="$current" xclip -i -sel clip
+    fi
+}
+
+crouton-websocket >/dev/null 2>&1 &
+
+xmethod="`readlink -f '/etc/X11/xinit/xserverrc'`"
+xmethod="${xmethod##*-}"
+
+# Launch xbindkeys for the Chromium OS X server if it isn't running
+if [ "$xmethod" = 'xephyr' ]; then
+    # Assume current display is Chromium OS
+    current=':0'
+    # Xephyr version
+    host-x11 xev -root -event substructure | mawk -W interactive '
+        m {
+            if ($6 == "NO") {
+                print $4
+            }
+            m = ""
+        }
+        /^MapNotify/ {
+            m = $1
+        }
+    ' | {
+        while read line; do
+            id="${line%%,}"
+            name="`host-x11 xprop -format WM_NAME 8s '\t$0\n' -id "$id" WM_NAME | cut -f 2`"
+            if [ "$name" = '"aura_root_0"' ]; then
+                display=":0"
+            else
+                display="`echo "$name" | sed -n -e 's/^\"Xephyr on \(:[0-9]\{1,\}\).*$/\1/p'`"
+            fi
+            copyclip "$display"
+        done
+    }
+elif [ "$xmethod" = 'x11' ]; then
+    # X11 version
+    croutonvtmonitor | {
+        while read id; do
+            process="`ps -h -o pid -t tty$id`"
+
+            display=''
+            for lock in /tmp/.X*-lock; do
+                if grep -q -e "^ *$process$" $lock; then
+                    display="${lock##/tmp/.X}"
+                    display=":${display%%-lock}"
+                fi
+            done
+            
+            if [ -n "$display" ]; then
+                copyclip "$display"
+            fi
+        done  
+    }
+fi
