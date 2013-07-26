@@ -1,4 +1,10 @@
 #!/bin/sh
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+#
+# Synchronizes clipboard between X display, leveraging on crouton's WebSocket
+# server and Chromium extension to synchronize the clipboard with Chromium OS
 
 VERBOSE='1'
 
@@ -74,18 +80,20 @@ elif [ "$xmethod" = 'x11' ]; then
     # X11 version
     croutonvtmonitor | {
         while read id; do
-            process="`ps -h -o pid -t tty$id`"
+            process="`ps -o pid= -t "$id" | sed 's/ //g'`"
 
-            display=''
-            for lock in /tmp/.X*-lock; do
-                if grep -q -e "^ *$process$" $lock; then
-                    display="${lock##/tmp/.X}"
-                    display=":${display%%-lock}"
+            if [ -n "$process" ]; then
+                display=''
+                for lock in /tmp/.X*-lock; do
+                    if grep -q -e "^ *$process$" $lock; then
+                        display="${lock##/tmp/.X}"
+                        display=":${display%%-lock}"
+                    fi
+                done
+
+                if [ -n "$display" ]; then
+                    copyclip "$display"
                 fi
-            done
-            
-            if [ -n "$display" ]; then
-                copyclip "$display"
             fi
         done  
     }

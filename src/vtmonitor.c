@@ -2,75 +2,62 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  *
- * Monitors changes in virtual terminal (VT). There is no "clean" way of doing
- * this in Linux: we start a thread for each possible TTY (1 to 63), and
- * monitor WAIT_ACTIVE ioctl.
- *
- * TODO: There is a cleaner way! Look into VT_WAITEVENT.
+ * Monitors changes in virtual terminal (VT). This is done by opening
+ * /sys/class/tty/tty0/active, and polling for POLLPRI. Then, we seek to the
+ * beginning of the file, and read its content, which looks like ttyX, where
+ * X is a number.
  */
 
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <linux/vt.h>
+#include <poll.h>
+#include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <fcntl.h>
-#include <pthread.h>
+#include <unistd.h>
 
-const int DEBUG = 0;
-
-int console_fd;
-pthread_t threads[MAX_NR_CONSOLES+1];
-int thread_data[MAX_NR_CONSOLES+1];
-int current = -1;
-
-pthread_mutex_t current_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-void monitor_vt(int vt);
-
-void *thread_func(void *data) {
-    int vt = *((int*)data);
-    if (DEBUG)
-        printf("Monitoring %d!\n", vt);
-
-    if (ioctl(console_fd, VT_WAITACTIVE, vt)) {
-        fprintf(stderr, "Cannot monitor VT_WAITACTIVE on VT %d\n", vt);
-        return NULL;
-    }
-
-    pthread_mutex_lock(&current_mutex);
-    printf("%d\n", vt);
-    fflush(stdout);
-
-    if (current != -1) {
-        monitor_vt(current);
-    }
-    current = vt;
-    pthread_mutex_unlock(&current_mutex);
-
-    return NULL;
-}
-
-void monitor_vt(int vt) {
-    thread_data[vt] = vt;
-    pthread_create(&threads[vt], NULL, thread_func, &thread_data[vt]);
-}
+#define SYSFILE "/sys/class/tty/tty0/active"
 
 int main(int argc, char **argv) {
-    int vt;
+    int fd;
+    struct pollfd fds[1];
+    char buffer[16];
 
-    console_fd = open("/dev/tty0", O_RDWR);
-    if (console_fd < 0) {
-        fprintf(stderr, "Cannot open /dev/tty0.\n");
-        exit(1);
+    fd = open(SYSFILE, O_RDONLY);
+
+    if (fd < 0) {
+        perror("Cannot open " SYSFILE);
+        return 1;
     }
 
-    for (vt = 1; vt < MAX_NR_CONSOLES; vt++) {
-        monitor_vt(vt);
-    }
+    memset(fds, 0, sizeof(fds));
+    fds[0].fd = fd;
+    fds[0].events = POLLPRI;
 
-    pthread_exit(0);
+    while (1) {
+        int n = poll(fds, 1, -1);
+        if (n <= 0) {
+            perror("poll did not return a positive value.");
+            return 1;
+        }
+
+        if (fds[0].revents & POLLPRI) {
+            /* Seek back to beginning of file and read the tty number. */
+            lseek(fd, 0, SEEK_SET);
+            n = read(fd, buffer, 16);
+            if (n <= 0) {
+                perror("Cannot read from " SYSFILE " file.");
+                return 1;
+            }
+
+            /* Write tty number to stdout */
+            fwrite(buffer, n, 1, stdout);
+            fflush(stdout);
+        } else {
+            fprintf(stderr, "Unknown poll event.\n");
+            return 1;
+        }
+    }
 
     return 0;
 }
-
