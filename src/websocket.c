@@ -9,7 +9,9 @@
  * FIXME: error handling everywhere
  * FIXME: add debug/verbose flag
  *
- * gcc websocket.c /tmp/libwebsockets/build/lib/libwebsockets.a -Wall -I/tmp/libwebsockets/lib -o crouton-websocket -lssl -lcrypto -lz
+ * compile libwebsockets with:
+ * mkdir build; cd build; cmake .. -DWITH_SSL=OFF -DWITHOUT_EXTENSIONS=YES; make -j3
+ * gcc websocket.c /tmp/libwebsockets/build/lib/libwebsockets.a -Wall -I/tmp/libwebsockets/lib -o crouton-websocket
  */
 
 #include <stdio.h>
@@ -30,10 +32,19 @@ const char* PIPEOUT_FILENAME = "/tmp/crouton-websocket-out";
 
 const int write_timeout = 3000;
 
+static int verbose = 0;
+
+/**/
+/* Pipe out functions */
+/**/
+
+/* Write some data to the pipe out. */
 static void write_pipeout(char* buffer, int len) {
-    printf("Writing to pipeout\n");
     int pipeout_fd;
     int i;
+
+    if (verbose)
+        printf("write_pipeout: opening pipe out\n");
 
     for (i = 0; i < write_timeout/10; i++) {
         pipeout_fd = open(PIPEOUT_FILENAME, O_WRONLY | O_NONBLOCK);
@@ -43,21 +54,49 @@ static void write_pipeout(char* buffer, int len) {
     }
 
     if (pipeout_fd < 0) {
-        fprintf(stderr, "timeout while writing data...\n");
+        fprintf(stderr, "write_pipeout: timeout while opening.\n");
     } else {
-        fcntl(pipeout_fd, F_SETFL, 0);
-        int n = write(pipeout_fd, buffer, len);
-        printf("write n=%d/%d\n", n, len);
+        /* Remove non-blocking flag */
+        int n;
+        int flags = fcntl(pipeout_fd, F_GETFL, 0);
+        if (flags < 0) {
+            perror("write_pipeout: error in fnctl GETFL.\n");
+            return;
+        }
+
+        n = fcntl(pipeout_fd, F_SETFL, flags & ~O_NONBLOCK);
+        if (n < 0) {
+            perror("write_pipeout: error in fnctl SETFL.\n");
+            return;
+        }
+
+        /* Write the data */
+        if (verbose)
+            printf("write_pipeout: writing len=%d\n", len);
+
+        n = write(pipeout_fd, buffer, len);
+
+        if (n < 0)
+            perror("write_pipeout: error in write.\n");
+        else if (n != len)
+            fprintf(stderr, "write_pipeout: Incomplete write (%d/%d).\n", n, len);
+
         close(pipeout_fd);
-        printf("ok\n");
+        if (verbose)
+            printf("write_pipeout: ok\n");
     }
 }
 
+/* Write a string to the pipe out. */
 static void write_pipeoutstr(char* str) {
     write_pipeout(str, strlen(str));
 }
 
-static int crouton_callback(struct libwebsocket_context *context,
+/**/
+/* Websocket functions */
+/**/
+
+static int websocket_callback(struct libwebsocket_context *context,
         struct libwebsocket *wsi,
         enum libwebsocket_callback_reasons reason, void *user,
                                void *in, size_t len);
@@ -72,7 +111,7 @@ struct per_session_data {
 static struct libwebsocket_protocols protocols[] = {
     {
         "default",        /* name */
-        crouton_callback,        /* callback */
+        websocket_callback,        /* callback */
         sizeof(struct per_session_data)    /* per_session_data_size */
     },
     {
@@ -80,9 +119,10 @@ static struct libwebsocket_protocols protocols[] = {
     }
 };
 
-/* Last active connection */
+/* Current active connection (last one to have been connected) */
 struct per_session_data *current_data = NULL;
 
+/* Close current session when a new connection is made. */
 static void close_session(struct per_session_data* pss) {
     if (!pss)
         return;
@@ -92,26 +132,31 @@ static void close_session(struct per_session_data* pss) {
     pss->active = 0;
     free(pss->buffer);
     pss->wlen = strlen(error);
-    pss->buffer = malloc(pss->wlen);
-    memcpy(pss->buffer, error, pss->wlen);
+    pss->buffer = malloc(LWS_SEND_BUFFER_PRE_PADDING+pss->wlen+
+                                              LWS_SEND_BUFFER_POST_PADDING);
+    memcpy(&pss->buffer[LWS_SEND_BUFFER_PRE_PADDING], error, pss->wlen);
 
     if (pss->pipeout_waiting) {
         write_pipeoutstr("Error: new connection.");
         pss->pipeout_waiting = 0;
     }
 
+    /* Make sure the buffer gets written. */
     libwebsocket_callback_on_writable_all_protocol(protocols);
 }
 
-static int crouton_callback(struct libwebsocket_context *context,
+/* Callback from libwebsocket */
+static int websocket_callback(struct libwebsocket_context *context,
         struct libwebsocket *wsi,
         enum libwebsocket_callback_reasons reason, void *user,
                                void *in, size_t len) {
     struct per_session_data *pss = (struct per_session_data *)user;
     int n;
 
-    if (reason == LWS_CALLBACK_ESTABLISHED) {
-        printf("Established\n");
+    switch(reason) {
+    case LWS_CALLBACK_ESTABLISHED:
+        if (verbose)
+            printf("websocket_callback: Established\n");
 
         /* Close current session, if any */
         close_session(current_data);
@@ -121,85 +166,121 @@ static int crouton_callback(struct libwebsocket_context *context,
         pss->pipeout_waiting = 0;
         pss->active = 1;
         current_data = pss;
-    } else if (reason == LWS_CALLBACK_CLOSED) {
-        printf("Closed\n");
+        break;
+
+    case LWS_CALLBACK_CLOSED:
+        if (verbose)
+            printf("websocket_callback: Closed\n");
+
         free(pss->buffer);
+
         if (pss->pipeout_waiting) {
             write_pipeoutstr("Error: Websocket closed.");
             pss->pipeout_waiting = 0;
         }
+
         if (current_data == pss)
             current_data = NULL;
-    } else if (reason == LWS_CALLBACK_SERVER_WRITEABLE) {
+
+        break;
+
+    case LWS_CALLBACK_SERVER_WRITEABLE:
+        if (verbose)
+            printf("websocket_callback: Writeable\n");
+
         if (pss->buffer) {
-            printf("Writing buffer (%d).\n", pss->wlen);
-            n = libwebsocket_write(wsi, &pss->buffer[LWS_SEND_BUFFER_PRE_PADDING], pss->wlen, LWS_WRITE_TEXT);
+            if (verbose)
+                printf("Writing buffer (%d).\n", pss->wlen);
+
+            n = libwebsocket_write(wsi,
+                &pss->buffer[LWS_SEND_BUFFER_PRE_PADDING], pss->wlen,
+                                                    LWS_WRITE_TEXT);
             free(pss->buffer);
             pss->buffer = NULL;
 
-            if (!pss->active) {
-                /* This connection is inactive: hang up anyway. */
+            if (n < 0) {
+                fprintf(stderr,
+                    "websocket_callback: ERROR %d writing to socket\n", n);
                 return -1;
             }
 
-            if (n < 0) {
-                fprintf(stderr, "ERROR %d writing to socket\n", n);
-                return -1;
-            }
             if (n < pss->wlen) {
-                fprintf(stderr, "Partial write\n");
+                fprintf(stderr,
+                    "websocket_callback: Partial write (%d/%d)\n",
+                                                            n, pss->wlen);
                 return -1;
             }
         } else {
-            fprintf(stderr, "LWS_CALLBACK_SERVER_WRITEABLE, but nothing to write.]n");
+            if (verbose)
+                printf("LWS_CALLBACK_SERVER_WRITEABLE, but nothing to write.\n");
         }
-    } else if (reason == LWS_CALLBACK_RECEIVE) {
+
         if (!pss->active) {
-            fprintf(stderr, "data on inactive connection!\n");
+            /* This connection is inactive: hang up. */
+            return -1;
+        }
+
+        break;
+
+    case LWS_CALLBACK_RECEIVE:
+        if (!pss->active) {
+            fprintf(stderr,
+                "websocket_callback: data on inactive connection!\n");
+            libwebsocket_callback_on_writable(context, wsi);
             return 0;
         }
 
         if (len == 0) {
-            fprintf(stderr, "0-length packet!\n");
-            return -1;
+            fprintf(stderr, "websocket_callback: 0-length packet!\n");
+            return 0;
         }
 
-        char cmd = *((char*)in);
-
         if (pss->buffer != NULL) {
-            fprintf(stderr, "pss->buffer should be NULL!");
+            fprintf(stderr, "websocket_callback: pss->buffer should be NULL!");
             free(pss->buffer);
             pss->buffer = NULL;
         }
 
-        printf("cmd=%c\n", cmd);
+        if (verbose)
+            printf("cmd=%c\n", *((char*)in));
 
-        switch(cmd) {
-        case 'V':
-            pss->buffer = malloc(LWS_SEND_BUFFER_PRE_PADDING+16+LWS_SEND_BUFFER_POST_PADDING);
-            pss->wlen = snprintf((char*)&pss->buffer[LWS_SEND_BUFFER_PRE_PADDING], 16, "V%d", VERSION);
+        switch(*((char*)in)) {
+        case 'V': /* Version */
+            pss->buffer = malloc(LWS_SEND_BUFFER_PRE_PADDING+16+
+                                             LWS_SEND_BUFFER_POST_PADDING);
+            pss->wlen = snprintf(
+                (char*)&pss->buffer[LWS_SEND_BUFFER_PRE_PADDING], 16,
+                "V%d", VERSION);
             libwebsocket_callback_on_writable(context, wsi);
             break;
-        case 'R':
-        case 'W':
+        case 'R': /* Read */
+        case 'W': /* Write */
             write_pipeout(in, len);
             pss->pipeout_waiting = 0;
             break;
         default:
-            fprintf(stderr, "Invalid command %c\n", cmd);
+            fprintf(stderr, "Invalid command %c\n", *((char*)in));
         }
-    } else {
+
+        break;
+
+    default:
         printf("Callback reason %d\n", reason);
     }
 
     return 0;
 }
 
+/**/
+/* Pipe in functions */
+/**/
+
 /* Flush the pipe, but ignore the data. */
 static void flush_pipein(int pipein_fd, char* buffer, int buffersize) {
     while (read(pipein_fd, buffer, buffersize) > 0);
 }
 
+/* Read data from the pipe */
 static void read_pipein(int pipein_fd) {
     int n;
     int wlen = 0;
@@ -215,7 +296,8 @@ static void read_pipein(int pipein_fd) {
 
     while ((n = read(pipein_fd, buffer+LWS_SEND_BUFFER_PRE_PADDING+wlen, buffersize-wlen)) > 0) {
         wlen += n;
-        printf("n=%d wlen=%d\n", n, wlen);
+        if (verbose)
+            printf("read n=%d wlen=%d\n", n, wlen);
         if (buffersize-wlen == 0) {
             if (buffersize >= 1048576) {
                 fprintf(stderr, "Will not allocate more than 1MB of buffer.\n");
@@ -230,7 +312,8 @@ static void read_pipein(int pipein_fd) {
             buffer = realloc(buffer, LWS_SEND_BUFFER_PRE_PADDING+buffersize+LWS_SEND_BUFFER_POST_PADDING);
         }
     }
-    printf("EOF (wlen=%d)\n", wlen);
+    if (verbose)
+        printf("EOF (wlen=%d)\n", wlen);
 
     char cmd = buffer[LWS_SEND_BUFFER_PRE_PADDING];
 
@@ -261,7 +344,6 @@ int main(int argc, char **argv)
     info.port = PORT;
     info.iface = "lo";
     info.protocols = protocols;
-    info.extensions = libwebsocket_get_internal_extensions();
     info.gid = -1;
     info.uid = -1;
     info.options = opts;
@@ -270,7 +352,7 @@ int main(int argc, char **argv)
 
     if (context == NULL) {
         fprintf(stderr, "libwebsocket init failed\n");
-        return -1;
+        return 1;
     }
 
     /* Create fifos */
@@ -279,15 +361,31 @@ int main(int argc, char **argv)
 
     pipein_fd = open(PIPEIN_FILENAME, O_RDONLY | O_NONBLOCK);
 
+    if (pipein_fd < 0) {
+        perror("main: cannot open pipe in.\n");
+        return 1;
+    }
+
     /* Now that open completed, make sure we block on further operations, until EOF */
-    fcntl(pipein_fd, F_SETFL, 0);
+    int flags = fcntl(pipein_fd, F_GETFL, 0);
+    if (flags < 0) {
+        perror("main: error in fnctl GETFL.\n");
+        return 1;
+    }
+
+    n = fcntl(pipein_fd, F_SETFL, flags & ~O_NONBLOCK);
+    if (n < 0) {
+        perror("main: error in fnctl SETFL.\n");
+        return 1;
+    }
 
     memset(fds, 0, sizeof(fds));
     fds[0].fd = pipein_fd;
     fds[0].events = POLLIN;
     nfds = 1;
 
-    printf("Main loop!\n");
+    if (verbose)
+        printf("Main loop!\n");
 
     /* FIXME: Put everything in a single poll */
     n = 0;
