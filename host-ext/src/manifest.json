@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
 
-  "name": "Crouton clipboard sync",
+  "name": "Crouton extension",
   "description": "This extension syncs between clipboard between crouton and Chromium OS",
   "version": "1.0",
 

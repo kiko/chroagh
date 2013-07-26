@@ -55,7 +55,7 @@ function websocketConnect() {
 
 function websocketOpen() {
     printDebug("Connection established.");
-    setStatus("Connection established", true);
+    setStatus("Connection established: checking version...", false);
     websocket_.send("V"); /* Request version */
 }
 
@@ -68,9 +68,12 @@ function websocketMessage(evt) {
 
     switch(cmd) {
     case 'V':
+        /* FIXME: This needs to be stateful (do not answer anything else until we get the version back) */
         if (payload != VERSION) {
             printError("Invalid server version " + payload + " != " + VERSION + ".");
         }
+        setStatus("Connection established.", true);
+        break;
     case 'W':
         clipboardholder_.value = payload;
         clipboardholder_.select();
