@@ -21,34 +21,30 @@ copyclip() {
         return 0
     fi
 
-    if [ -n "$VERBOSE" ]; then
-        echo ">>Current: $current>>"
-    fi
+    [ -n "$VERBOSE" ] && echo ">>Current: $current>>"
 
     if [ "$current" = ":0" ]; then
         echo -n R > /tmp/crouton-websocket-in
         cat /tmp/crouton-websocket-out > "$cliptmp2"
-        STATUS=`head -c 1 "$cliptmp2"`
+        STATUS="`head -c 1 "$cliptmp2"`"
         if [ "$STATUS" = "R" ]; then
             tail -c +2 "$cliptmp2" > "$cliptmp"
         else
             # Skip Chromium OS
             echo -n "crouton-websocket error: " >&2
-            cat $cliptmp2 >&2
+            cat "$cliptmp2" >&2
             return 0
         fi
     else
         DISPLAY="$current" xclip -o -sel clip > "$cliptmp"
     fi
 
-    if [ -n "$VERBOSE" ]; then
-        cat "$cliptmp"
-    fi
+    [ -n "$VERBOSE" ] && cat "$cliptmp"
 
     # Paste clipboard content to current window
     if [ "$next" = ":0" ]; then
         (echo -n W; cat "$cliptmp") > /tmp/crouton-websocket-in
-        STATUS=`cat /tmp/crouton-websocket-out`
+        STATUS="`cat /tmp/crouton-websocket-out`"
         if [ "$STATUS" != "WOK" ]; then
             # Write failed, skip Chromium OS
             echo -n "crouton-websocket error: $STATUS" >&2
@@ -63,12 +59,30 @@ copyclip() {
         fi
     fi
 
-    if [ -n "$VERBOSE" ]; then
-        echo "<<Next: $next<<"
-    fi
+    [ -n "$VERBOSE" ] && echo "<<Next: $next<<"
 
     previous="$current"
     current="$next"
+}
+
+# Wait for the websocket server to get connected to the extension
+# Timeout after 12 seconds (2*5 seconds + margin)
+waitwebsocket() {
+    timeout=12
+    while [ $timeout -gt 0 ]; do
+        [ -n "$VERBOSE" ] && echo "Ping..."
+        RND="`head -c 9 /dev/urandom | base64`"
+        echo -n "P$RND" > /tmp/crouton-websocket-in
+        STATUS=`cat /tmp/crouton-websocket-out`
+        if [ "$STATUS" = "P$RND" ]; then
+            [ -n "$VERBOSE" ] && echo "OK!"
+            return 0
+        fi
+        [ -n "$VERBOSE" ] && echo "$STATUS"
+        sleep 1
+        timeout=$(($timeout-1))
+    done
+    echo "Timeout waiting for extension to connect.\n" >&2
 }
 
 crouton-websocket >/dev/null 2>&1 &
@@ -92,6 +106,7 @@ if [ "$xmethod" = 'xephyr' ]; then
             m = $1
         }
     ' | {
+        waitwebsocket;
         while read line; do
             id="${line%%,}"
             name="`host-x11 xprop -format WM_NAME 8s '\t$0\n' -id "$id" WM_NAME | cut -f 2`"
@@ -106,6 +121,7 @@ if [ "$xmethod" = 'xephyr' ]; then
 elif [ "$xmethod" = 'x11' ]; then
     # X11 version
     croutonvtmonitor | {
+        waitwebsocket
         while read id; do
             process="`ps -o pid= -t "$id" | sed 's/ //g'`"
 

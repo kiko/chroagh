@@ -474,6 +474,13 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
 
         /* FIXME: Do something with control opcodes */
 
+        if (opcode == 8) { /* Connection close. */
+            fprintf(stderr, "socket_client_read_frame_header: Connection close from websocket client\n");
+            socket_client_close();
+            free(buffer);
+            return -1;
+        }
+
         free(buffer);
 
         /* Tell the caller to wait for next packet. */

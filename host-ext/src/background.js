@@ -67,14 +67,14 @@ function websocketMessage(evt) {
     printDebug("Message is received (" + cmd + "+" + received_msg + ")");
 
     switch(cmd) {
-    case 'V':
+    case 'V': /* Version */
         /* FIXME: This needs to be stateful (do not answer anything else until we get the version back) */
         if (payload != VERSION) {
             printError("Invalid server version " + payload + " != " + VERSION + ".");
         }
         setStatus("Connection established.", true);
         break;
-    case 'W':
+    case 'W': /* Write */
         clipboardholder_.value = "";
         clipboardholder_.select();
         document.execCommand("Paste");
@@ -89,11 +89,14 @@ function websocketMessage(evt) {
         }
         websocket_.send("WOK");
         break;
-    case 'R':
+    case 'R': /* Read */
         clipboardholder_.value = "";
         clipboardholder_.select();
         document.execCommand("Paste");
         websocket_.send("R" + clipboardholder_.value);
+        break;
+    case 'P': /* Ping */
+        websocket_.send(received_msg);
         break;
     case 'E':
         printError("Server error: " + payload);
