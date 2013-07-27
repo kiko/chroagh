@@ -303,6 +303,8 @@ static void pipein_read() {
 
 /* Initialise FIFO pipes. */
 void pipe_init() {
+    /* FIXME: This is not an awesome idea if the script starts reading the pipe
+     * before we delete it... */
     /* Delete fifos if they exist (ignore errors, if any) */
     unlink(PIPEIN_FILENAME);
     unlink(PIPEOUT_FILENAME);

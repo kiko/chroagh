@@ -95,6 +95,12 @@ function websocketMessage(evt) {
         document.execCommand("Paste");
         websocket_.send("R" + clipboardholder_.value);
         break;
+    case 'U': /* Open an URL */
+        /* FIXME: Sanity check? We may not want people to open stuff like
+         * javascript:alert("hello") */
+        chrome.tabs.create({ url: payload });
+        websocket_.send("UOK");
+        break;
     case 'P': /* Ping */
         websocket_.send(received_msg);
         break;

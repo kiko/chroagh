@@ -24,8 +24,11 @@ copyclip() {
     [ -n "$VERBOSE" ] && echo ">>Current: $current>>"
 
     if [ "$current" = ":0" ]; then
-        echo -n R > /tmp/crouton-websocket-in
-        cat /tmp/crouton-websocket-out > "$cliptmp2"
+        (
+            flock 5
+            echo -n R > /tmp/crouton-websocket-in
+            cat /tmp/crouton-websocket-out > "$cliptmp2"
+        ) 5>/tmp/crouton-websocket-lock
         STATUS="`head -c 1 "$cliptmp2"`"
         if [ "$STATUS" = "R" ]; then
             tail -c +2 "$cliptmp2" > "$cliptmp"
@@ -43,8 +46,12 @@ copyclip() {
 
     # Paste clipboard content to current window
     if [ "$next" = ":0" ]; then
-        (echo -n W; cat "$cliptmp") > /tmp/crouton-websocket-in
-        STATUS="`cat /tmp/crouton-websocket-out`"
+        STATUS="`(
+            flock 5
+            (echo -n W; cat "$cliptmp") > /tmp/crouton-websocket-in
+            cat /tmp/crouton-websocket-out
+        ) 5>/tmp/crouton-websocket-lock`"
+
         if [ "$STATUS" != "WOK" ]; then
             # Write failed, skip Chromium OS
             echo -n "crouton-websocket error: $STATUS" >&2
@@ -55,7 +62,7 @@ copyclip() {
         # (we might have rich text or other content in the clipboard)
         DISPLAY="$next" xclip -o -sel clip > "$cliptmp2"
         if ! diff -q "$cliptmp" "$cliptmp2" > /dev/null; then
-            cat "$cliptmp" | DISPLAY="$current" xclip -i -sel clip
+            cat "$cliptmp" | DISPLAY="$next" xclip -i -sel clip
         fi
     fi
 
@@ -72,8 +79,11 @@ waitwebsocket() {
     while [ $timeout -gt 0 ]; do
         [ -n "$VERBOSE" ] && echo "Ping..."
         RND="`head -c 9 /dev/urandom | base64`"
-        echo -n "P$RND" > /tmp/crouton-websocket-in
-        STATUS=`cat /tmp/crouton-websocket-out`
+        STATUS="`(
+            echo -n "P$RND" > /tmp/crouton-websocket-in
+            cat /tmp/crouton-websocket-out
+        ) 5>/tmp/crouton-websocket-lock`"
+
         if [ "$STATUS" = "P$RND" ]; then
             [ -n "$VERBOSE" ] && echo "OK!"
             return 0
@@ -82,7 +92,7 @@ waitwebsocket() {
         sleep 1
         timeout=$(($timeout-1))
     done
-    echo "Timeout waiting for extension to connect.\n" >&2
+    echo "Timeout waiting for extension to connect." >&2
 }
 
 crouton-websocket >/dev/null 2>&1 &
