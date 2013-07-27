@@ -6,7 +6,7 @@
 # Synchronizes clipboard between X display, leveraging on crouton's WebSocket
 # server and Chromium extension to synchronize the clipboard with Chromium OS
 
-VERBOSE='1'
+VERBOSE='0'
 
 previous=''
 current=''
@@ -41,6 +41,10 @@ copyclip() {
         cat /tmp/crouton-websocket-out > /dev/null
     else
         cat "$cliptmp" | DISPLAY="$current" xclip -i -sel clip
+    fi
+
+    if [ -n "$VERBOSE" ]; then
+        echo "Done"
     fi
 }
 

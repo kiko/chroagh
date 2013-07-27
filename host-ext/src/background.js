@@ -108,6 +108,8 @@ function websocketClose() {
 }
 
 function printDebug(str) {
+    if (str.length > 80)
+        str = str.substring(0, 77) + "...";
     console.log(str);
     if (DEBUG) {
         logger_.unshift(str);
