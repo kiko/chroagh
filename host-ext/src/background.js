@@ -75,9 +75,18 @@ function websocketMessage(evt) {
         setStatus("Connection established.", true);
         break;
     case 'W':
-        clipboardholder_.value = payload;
+        clipboardholder_.value = "";
         clipboardholder_.select();
-        document.execCommand("Copy");
+        document.execCommand("Paste");
+        /* Do not erase identical clipboard content */
+        if (clipboardholder_.value != payload) {
+            clipboardholder_.value = payload;
+            clipboardholder_.select();
+            /* FIXME: Cannot copy empty text, this is a problem with binary data in Linux. */
+            document.execCommand("Copy");
+        } else {
+            printDebug("Not erasing content (identical).");
+        }
         websocket_.send("WOK");
         break;
     case 'R':

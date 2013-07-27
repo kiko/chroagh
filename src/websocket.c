@@ -282,6 +282,10 @@ static void pipein_read() {
     while (fin != 1) {
         int len = socket_client_read_frame_header(&fin, &maskkey);
 
+        if (len < 0) {
+            break;
+        }
+
         while (len > 0) {
             int rlen = (len > BUFFERSIZE) ? BUFFERSIZE: len;
             if (socket_client_read_frame_data(buffer, rlen, maskkey) < 0) {
@@ -516,8 +520,15 @@ static void socket_client_read() {
     while (fin != 1) {
         int curlen = socket_client_read_frame_header(&fin, &maskkey);
 
+        if (curlen < 0) {
+            free(buffer);
+            socket_client_close();
+            return;
+        }
+
         if (length+curlen > MAXFRAMESIZE) {
             fprintf(stderr, "socket_client_read: Frame too big (%d>%d)\n", length+curlen, MAXFRAMESIZE);
+            free(buffer);
             socket_client_close();
             return;
         }
@@ -806,8 +817,8 @@ int main(int argc, char **argv) {
     fds[2].events = POLLIN;
 
     /* Initialise pipe and WebSocket server */
-    pipe_init();
     socket_server_init();
+    pipe_init();
 
     while ((n = poll(fds, nfds, -1)) >= 0) {
         if (fds[0].revents & POLLIN) {

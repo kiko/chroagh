@@ -11,41 +11,64 @@ VERBOSE='0'
 previous=''
 current=''
 cliptmp="`mktemp "croutonclip.XXX"`"
-trap "rm -f $cliptmp" INT HUP 0
+cliptmp2="`mktemp "croutonclip.XXX"`"
+trap "rm -f \"$cliptmp\" \"$cliptmp2\"" INT HUP 0
 
 copyclip() {
-    previous="$current"
-    current="$1"
-    
-    if [ -z "$previous" -o "$previous" = "$current" ]; then
+    next="$1"
+
+    if [ -z "$current" -o "$current" = "$next" ]; then
         return 0
     fi
 
-    if [ "$previous" = ":0" ]; then
+    if [ -n "$VERBOSE" ]; then
+        echo ">>Current: $current>>"
+    fi
+
+    if [ "$current" = ":0" ]; then
         echo -n R > /tmp/crouton-websocket-in
-        # FIXME: error checking?
-        tail -c +2 /tmp/crouton-websocket-out > "$cliptmp"
+        cat /tmp/crouton-websocket-out > "$cliptmp2"
+        STATUS=`head -c 1 "$cliptmp2"`
+        if [ "$STATUS" = "R" ]; then
+            tail -c +2 "$cliptmp2" > "$cliptmp"
+        else
+            # Skip Chromium OS
+            echo -n "crouton-websocket error: " >&2
+            cat $cliptmp2 >&2
+            return 0
+        fi
     else
-        DISPLAY="$previous" xclip -o -sel clip > "$cliptmp"
+        DISPLAY="$current" xclip -o -sel clip > "$cliptmp"
     fi
 
     if [ -n "$VERBOSE" ]; then
-        echo "==Previous: $previous=="
         cat "$cliptmp"
-        echo "==Current: $current=="
     fi
 
     # Paste clipboard content to current window
-    if [ "$current" = ":0" ]; then
+    if [ "$next" = ":0" ]; then
         (echo -n W; cat "$cliptmp") > /tmp/crouton-websocket-in
-        cat /tmp/crouton-websocket-out > /dev/null
+        STATUS=`cat /tmp/crouton-websocket-out`
+        if [ "$STATUS" != "WOK" ]; then
+            # Write failed, skip Chromium OS
+            echo -n "crouton-websocket error: $STATUS" >&2
+            return 0
+        fi
     else
-        cat "$cliptmp" | DISPLAY="$current" xclip -i -sel clip
+        # Do not override content if it "looks" the same
+        # (we might have rich text or other content in the clipboard)
+        DISPLAY="$next" xclip -o -sel clip > "$cliptmp2"
+        if ! diff -q "$cliptmp" "$cliptmp2" > /dev/null; then
+            cat "$cliptmp" | DISPLAY="$current" xclip -i -sel clip
+        fi
     fi
 
     if [ -n "$VERBOSE" ]; then
-        echo "Done"
+        echo "<<Next: $next<<"
     fi
+
+    previous="$current"
+    current="$next"
 }
 
 crouton-websocket >/dev/null 2>&1 &
