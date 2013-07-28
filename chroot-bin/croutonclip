@@ -8,6 +8,10 @@
 
 VERBOSE='0'
 
+PIPEIN='/tmp/croutonwebsocket-in'
+PIPEOUT='/tmp/croutonwebsocket-out'
+PIPELOCK='/tmp/croutonwebsocket-lock'
+
 previous=''
 current=''
 cliptmp="`mktemp "croutonclip.XXX"`"
@@ -26,15 +30,15 @@ copyclip() {
     if [ "$current" = ":0" ]; then
         (
             flock 5
-            echo -n R > /tmp/crouton-websocket-in
-            cat /tmp/crouton-websocket-out > "$cliptmp2"
-        ) 5>/tmp/crouton-websocket-lock
+            echo -n R > "$PIPEIN"
+            cat "$PIPEOUT" > "$cliptmp2"
+        ) 5>"$PIPELOCK"
         STATUS="`head -c 1 "$cliptmp2"`"
         if [ "$STATUS" = "R" ]; then
             tail -c +2 "$cliptmp2" > "$cliptmp"
         else
             # Skip Chromium OS
-            echo -n "crouton-websocket error: " >&2
+            echo -n "croutonwebsocket error: " >&2
             cat "$cliptmp2" >&2
             return 0
         fi
@@ -48,13 +52,13 @@ copyclip() {
     if [ "$next" = ":0" ]; then
         STATUS="`(
             flock 5
-            (echo -n W; cat "$cliptmp") > /tmp/crouton-websocket-in
-            cat /tmp/crouton-websocket-out
-        ) 5>/tmp/crouton-websocket-lock`"
+            (echo -n W; cat "$cliptmp") > "$PIPEIN"
+            cat "$PIPEOUT"
+        ) 5>"$PIPELOCK"`"
 
         if [ "$STATUS" != "WOK" ]; then
             # Write failed, skip Chromium OS
-            echo -n "crouton-websocket error: $STATUS" >&2
+            echo -n "croutonwebsocket error: $STATUS" >&2
             return 0
         fi
     else
@@ -80,9 +84,9 @@ waitwebsocket() {
         [ -n "$VERBOSE" ] && echo "Ping..."
         RND="`head -c 9 /dev/urandom | base64`"
         STATUS="`(
-            echo -n "P$RND" > /tmp/crouton-websocket-in
-            cat /tmp/crouton-websocket-out
-        ) 5>/tmp/crouton-websocket-lock`"
+            echo -n "P$RND" > "$PIPEIN"
+            cat "$PIPEOUT"
+        ) 5>"$PIPELOCK"`"
 
         if [ "$STATUS" = "P$RND" ]; then
             [ -n "$VERBOSE" ] && echo "OK!"
@@ -95,7 +99,7 @@ waitwebsocket() {
     echo "Timeout waiting for extension to connect." >&2
 }
 
-crouton-websocket >/dev/null 2>&1 &
+croutonwebsocket >/dev/null 2>&1 &
 
 xmethod="`readlink -f '/etc/X11/xinit/xserverrc'`"
 xmethod="${xmethod##*-}"
