@@ -16,6 +16,14 @@ if [ "$xmethod" = 'xephyr' -a -x "$croutonwm" ]; then
     "$croutonwm" --fork
 fi
 
+# Launch the clipboard synchronization daemon
+croutonclip='/usr/local/bin/croutonclip'
+echo "Starting croutonclip?"
+if ! ps -C croutonclip >/dev/null && [ -x "$croutonclip" ]; then
+    echo "Starting croutonclip"
+    "$croutonclip" <&- &
+fi
+
 xserverrc='/etc/X11/xinit/xserverrc'
 dash='--'
 for arg in "$@"; do

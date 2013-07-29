@@ -401,7 +401,7 @@ static void socket_client_close(int close_reason) {
          * or a string. */
         buffer[0] = close_reason >> 8;
         buffer[1] = close_reason;
-        int length = 2+snprintf(buffer+2, 256, "croutonwebsocket error\n");
+        int length = 2+snprintf(buffer+2, 256-2, "croutonwebsocket error\n");
         socket_client_write_frame(buffer, length, 8, 1);
         /* Note: We are supposed to read back the answer, but that make thing
          * a little complicated in most case. */

@@ -6,7 +6,7 @@
 # Synchronizes clipboard between X display, leveraging on crouton's WebSocket
 # server and Chromium extension to synchronize the clipboard with Chromium OS
 
-VERBOSE='0'
+VERBOSE=''
 
 PIPEIN='/tmp/croutonwebsocket-in'
 PIPEOUT='/tmp/croutonwebsocket-out'
@@ -110,7 +110,7 @@ if [ "$xmethod" = 'xephyr' ]; then
     # Assume current display is Chromium OS
     current=':0'
     # Xephyr version
-    host-x11 xev -root -event substructure | mawk -W interactive '
+    host-x11 xev -root | mawk -W interactive '
         m {
             if ($6 == "NO") {
                 print $4
