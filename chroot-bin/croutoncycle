@@ -25,29 +25,29 @@ curtty="tty`fgconsole`"
 seltty=''
 
 if [ "$cmd" = 'select 0' ]; then
-    seltty='tty1'
-else
-    prevtty=''
-    for tty in `ps -CX -CXorg -otname= | sort`; do
-        if [ "$cmd" = 'next' -a -z "$seltty" ]; then
-            seltty="$tty"
-        fi
-        if [ -z "$curtty" ]; then
-            seltty="$tty"
-            break
-        elif [ "$tty" = "$curtty" ]; then
-            # Make the tty selection.
-            if [ "$cmd" = 'prev' ]; then
-                seltty="$prevtty"
-            else
-                curtty=''
-            fi
-        fi
-        prevtty="$tty"
-    done
-    if [ -z "$seltty" ]; then
+    exec chvt 1
+fi
+
+prevtty=''
+for tty in `ps -CX -CXorg -otname= | sort`; do
+    if [ "$cmd" = 'next' -a -z "$seltty" ]; then
         seltty="$tty"
     fi
+    if [ -z "$curtty" ]; then
+        seltty="$tty"
+        break
+    elif [ "$tty" = "$curtty" ]; then
+        # Make the tty selection.
+        if [ "$cmd" = 'prev' ]; then
+            seltty="$prevtty"
+        else
+            curtty=''
+        fi
+    fi
+    prevtty="$tty"
+done
+if [ -z "$seltty" ]; then
+    seltty="$tty"
 fi
 
 # If we have a tty and it's not the same as the current one, switch

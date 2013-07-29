@@ -41,7 +41,7 @@ const int PIPEOUT_WRITE_TIMEOUT = 3000;
  * 1 - General messages (init, new connections)
  * 2 - 1 + Messages on each new transfers
  * 3 - 2 + Extra information */
-static int verbose = 3;
+static int verbose = 1;
 
 static int server_fd = -1;
 static int pipein_fd = -1;

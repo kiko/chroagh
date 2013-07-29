@@ -12,6 +12,20 @@ PIPEIN='/tmp/croutonwebsocket-in'
 PIPEOUT='/tmp/croutonwebsocket-out'
 PIPELOCK='/tmp/croutonwebsocket-lock'
 
+# Write a command to croutonwebsocket, and read back response
+websocketcommand() {
+        (
+            # Make sure we do not create $PIPEIN if it does not exist
+            [ -p "$PIPEIN" -a -p "$PIPEOUT" ] || {
+                echo "EError $PIPEIN or $PIPEOUT are not pipes." > "$cliptmp2"
+                exit 0
+            }
+            flock 5
+            cat > "$PIPEIN"
+            cat "$PIPEOUT"
+        ) 5>"$PIPELOCK"
+}
+
 previous=''
 current=''
 cliptmp="`mktemp "croutonclip.XXX"`"
@@ -28,16 +42,7 @@ copyclip() {
     [ -n "$VERBOSE" ] && echo ">>Current: $current>>"
 
     if [ "$current" = ":0" ]; then
-        (
-            # Make sure we do not create $PIPEIN if it does not exist
-            [ -p "$PIPEIN" ] || {
-                echo "EError $PIPEIN is not a pipe." > "$cliptmp2"
-                exit 0
-            }
-            flock 5
-            echo -n R > "$PIPEIN"
-            cat "$PIPEOUT" > "$cliptmp2"
-        ) 5>"$PIPELOCK"
+        echo -n R | websocketcommand > "$cliptmp2"
         STATUS="`head -c 1 "$cliptmp2"`"
         if [ "$STATUS" = "R" ]; then
             tail -c +2 "$cliptmp2" > "$cliptmp"
@@ -55,16 +60,7 @@ copyclip() {
 
     # Paste clipboard content to current window
     if [ "$next" = ":0" ]; then
-        STATUS="`(
-            [ -p "$PIPEIN" ] || {
-                echo "EError $PIPEIN is not a pipe."
-                exit 0
-            }
-            flock 5
-            (echo -n W; cat "$cliptmp") > "$PIPEIN"
-            cat "$PIPEOUT"
-        ) 5>"$PIPELOCK"`"
-
+        STATUS="`(echo -n W; cat "$cliptmp") | websocketcommand`"
         if [ "$STATUS" != "WOK" ]; then
             # Write failed, skip Chromium OS
             echo -n "croutonwebsocket error: $STATUS" >&2
@@ -92,15 +88,7 @@ waitwebsocket() {
     while [ $timeout -gt 0 ]; do
         [ -n "$VERBOSE" ] && echo "Ping..."
         RND="`head -c 9 /dev/urandom | base64`"
-        STATUS="`(
-            [ -p "$PIPEIN" ] || {
-                echo "EError $PIPEIN is not a pipe." > "$cliptmp2"
-                exit 0
-            }
-            echo -n "P$RND" > "$PIPEIN"
-            cat "$PIPEOUT"
-        ) 5>"$PIPELOCK"`"
-
+        STATUS="`echo -n "P$RND" | websocketcommand`"
         if [ "$STATUS" = "P$RND" ]; then
             [ -n "$VERBOSE" ] && echo "OK!"
             return 0
