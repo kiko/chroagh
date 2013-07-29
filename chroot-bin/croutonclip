@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -e
 # Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -29,6 +29,11 @@ copyclip() {
 
     if [ "$current" = ":0" ]; then
         (
+            # Make sure we do not create $PIPEIN if it does not exist
+            [ -p "$PIPEIN" ] || {
+                echo "EError $PIPEIN is not a pipe." > "$cliptmp2"
+                exit 0
+            }
             flock 5
             echo -n R > "$PIPEIN"
             cat "$PIPEOUT" > "$cliptmp2"
@@ -51,6 +56,10 @@ copyclip() {
     # Paste clipboard content to current window
     if [ "$next" = ":0" ]; then
         STATUS="`(
+            [ -p "$PIPEIN" ] || {
+                echo "EError $PIPEIN is not a pipe."
+                exit 0
+            }
             flock 5
             (echo -n W; cat "$cliptmp") > "$PIPEIN"
             cat "$PIPEOUT"
@@ -77,13 +86,17 @@ copyclip() {
 }
 
 # Wait for the websocket server to get connected to the extension
-# Timeout after 12 seconds (2*5 seconds + margin)
+# Timeout after 10 seconds (2*5 seconds)
 waitwebsocket() {
-    timeout=12
+    timeout=10
     while [ $timeout -gt 0 ]; do
         [ -n "$VERBOSE" ] && echo "Ping..."
         RND="`head -c 9 /dev/urandom | base64`"
         STATUS="`(
+            [ -p "$PIPEIN" ] || {
+                echo "EError $PIPEIN is not a pipe." > "$cliptmp2"
+                exit 0
+            }
             echo -n "P$RND" > "$PIPEIN"
             cat "$PIPEOUT"
         ) 5>"$PIPELOCK"`"
