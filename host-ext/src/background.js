@@ -2,21 +2,33 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-var DEBUG = true;
+/* Constants */
 var URL = "ws://localhost:30001/";
 var VERSION = "0";
+var MAXLOGGERLEN = 20;
+
+LogLevel = {
+    ERROR : 0,
+    INFO : 1,
+    DEBUG : 2
+}
 
 var clipboardholder_;
-var websocket_;
+var timeout_ = null;
+var websocket_ = null;
 
-var error_ = false;
+var debug_ = false;
+var enabled_ = true; /* true if we are trying to connect */
+var active_ = false; /* true if we are connected to a server */
 
 var status_ = "";
-var errortext_ = "";
 var logger_ = [];
 
-function setStatus(status, online) {
-    chrome.browserAction.setIcon({path: online ? "icon-online.png" : "icon-offline.png"});
+function setStatus(status, active) {
+    active_ = active;
+    /* FIXME: Third icon when not enabled */
+
+    chrome.browserAction.setIcon({path: active_ ? "icon-online.png" : "icon-offline.png"});
 
     status_ = status;
     refreshPopup();
@@ -25,17 +37,77 @@ function setStatus(status, online) {
 refreshPopup = function() {
     var views = chrome.extension.getViews({type: "popup"});
     for (var i = 0; i < views.length; views++) {
-        var info = views[i].document.getElementById("info");
-        if (info) info.textContent = status_;
-        var error = views[i].document.getElementById("error");
-        if (error) error.textContent = errortext_;
-        var logger = views[i].document.getElementById("logger");
-        if (logger) logger.textContent = logger_.join('\n');
+        if (document.readyState === "complete") {
+            /* FIXME: There is a little box coming around the link, why? */
+            enablelink = views[i].document.getElementById("enable");
+            if (enabled_) {
+                enablelink.textContent = "Disable";
+                enablelink.onclick = function() {
+                    console.log("Disable click");
+                    enabled_ = false;
+                    if (websocket_ != null)
+                        websocket_.close();
+                    else
+                        websocketConnect(); /* Clear timeout and display message */
+                    refreshPopup();
+                }
+            } else {
+                enablelink.textContent = "Enable";
+                enablelink.onclick = function() {
+                    console.log("Enable click");
+                    enabled_ = true;
+                    if (websocket_ == null)
+                        websocketConnect();
+                    refreshPopup();
+                }
+            }
+
+            debugcheck = views[i].document.getElementById("debugcheck");
+            debugcheck.onclick = refreshPopup;
+            debug_ = debugcheck.checked;
+
+            views[i].document.getElementById("info").textContent = status_;
+            loggertable = views[i].document.getElementById("logger");
+
+            /* FIXME: only update needed rows */
+            while (loggertable.rows.length > 0) {
+                loggertable.deleteRow(0);
+            }
+
+            for (i = 0; i < logger_.length; i++) {
+                value = logger_[i];
+
+                if (value[0] == LogLevel.DEBUG && !debug_)
+                    continue;
+
+                var row = loggertable.insertRow(-1);
+                var cell1 = row.insertCell(0);
+                var cell2 = row.insertCell(1);
+                var levelclass = "debug";
+                switch (value[0]) {
+                case LogLevel.ERROR:
+                    levelclass = "error";
+                    break;
+                case LogLevel.INFO:
+                    levelclass = "info";
+                    break;
+                case LogLevel.DEBUG:
+                default:
+                    levelclass = "debug";
+                    break;
+                }
+                cell1.className = "time " + levelclass;
+                cell2.className = "value " + levelclass;
+                cell1.innerHTML = value[1];
+                cell2.innerHTML = value[2];
+            }
+            //views[i].document.getElementById("logger").textContent = logger_.join('\n');
+        }
     }
 }
 
 function clipboardStart() {
-    printDebug("Crouton extension running!");
+    printLog("Crouton extension running!", LogLevel.DEBUG);
     setStatus("Started...", false);
 
     clipboardholder_ = document.getElementById("clipboardholder");
@@ -44,9 +116,26 @@ function clipboardStart() {
 }
 
 function websocketConnect() {
-    printDebug("Opening a web socket");
+    if (timeout_ != null) {
+        clearTimeout(timeout_); /* Clear timeout if we were called manually. */
+        timeout_ = null;
+    }
+
+    if (!enabled_) {
+        setStatus("No connection (extension disabled).", false);
+        printLog("Extension is disabled.", LogLevel.INFO);
+        return;
+    }
+
+    if (websocket_ != null) {
+        printLog("Socket already open", LogLevel.DEBUG);
+        return;
+    }
+
+    console.log("websocketConnect: " + websocket_);
+
+    printLog("Opening a web socket", LogLevel.DEBUG);
     setStatus("Connecting...", false);
-    errortext_ = "";
     websocket_ = new WebSocket(URL);
     websocket_.onopen = websocketOpen;
     websocket_.onmessage = websocketMessage;
@@ -54,7 +143,7 @@ function websocketConnect() {
 }
 
 function websocketOpen() {
-    printDebug("Connection established.");
+    printLog("Connection established.", LogLevel.INFO);
     setStatus("Connection established: checking version...", false);
     websocket_.send("V"); /* Request version */
 }
@@ -64,16 +153,23 @@ function websocketMessage(evt) {
     var cmd = received_msg[0];
     var payload = received_msg.substring(1);
 
-    printDebug("Message is received (" + cmd + "+" + received_msg + ")");
+    printLog("Message is received (" + cmd + "+" + received_msg + ")", LogLevel.DEBUG);
+
+    /* Only accept version packets until we have checked the version. */
+    if (!active_) {
+        if (cmd == 'V') { /* Version */
+            if (payload != VERSION) {
+                error("Invalid server version " + payload + " != " + VERSION + ".", false);
+            }
+            setStatus("Connection established.", true);
+            active_ = true;
+            return;
+        } else {
+            error("Received frame while waiting for version.", false);
+        }
+    }
 
     switch(cmd) {
-    case 'V': /* Version */
-        /* FIXME: This needs to be stateful (do not answer anything else until we get the version back) */
-        if (payload != VERSION) {
-            printError("Invalid server version " + payload + " != " + VERSION + ".");
-        }
-        setStatus("Connection established.", true);
-        break;
     case 'W': /* Write */
         clipboardholder_.value = "";
         clipboardholder_.select();
@@ -85,7 +181,7 @@ function websocketMessage(evt) {
             /* FIXME: Cannot copy empty text, this is a problem with binary data in Linux. */
             document.execCommand("Copy");
         } else {
-            printDebug("Not erasing content (identical).");
+            printLog("Not erasing content (identical).", LogLevel.DEBUG);
         }
         websocket_.send("WOK");
         break;
@@ -105,44 +201,66 @@ function websocketMessage(evt) {
         websocket_.send(received_msg);
         break;
     case 'E':
-        printError("Server error: " + payload);
+        error("Server error: " + payload, 1);
         break;
     default:
-        printError("Invalid packet from server: " + received_msg);
+        error("Invalid packet from server: " + received_msg, 1);
         break;
     }
 }
 
 function websocketClose() {
-    if (!error_) {
-        setStatus("No connection (retrying in 5 seconds)", false);
-        printDebug("Connection is closed, try again in 5 seconds...");
-        /* Retry in 5 seconds */
-        setTimeout(websocketConnect, 5000);
-    } else {
-        setStatus("No connection (error: not retrying).", false);
-        printDebug("Connection is closed after an error, not retrying.");
+    if (websocket_ == null) {
+        console.log("websocketClose: null!");
+        return;
     }
+
+    if (enabled_) {
+        setStatus("No connection (retrying in 5 seconds)", false);
+        printLog("Connection is closed, trying again in 5 seconds...", LogLevel.INFO);
+        /* Retry in 5 seconds */
+        if (timeout_ == null) {
+            timeout_ = setTimeout(websocketConnect, 5000);
+        }
+    } else {
+        setStatus("No connection (extension disabled).", false);
+        printLog("Connection is closed, extension is disabled: not retrying.", LogLevel.INFO);
+    }
+    websocket_ = null;
 }
 
-function printDebug(str) {
+function padstr0(i) {
+    var s = i + "";
+    if (s.length < 2)
+        return "0" + s;
+    else
+        return s;
+}
+
+function printLog(str, level) {
+    date = new Date;
+    datestr = padstr0(date.getHours()) + ":" +
+          padstr0(date.getMinutes()) + ":" +
+          padstr0(date.getSeconds());
+
     if (str.length > 80)
         str = str.substring(0, 77) + "...";
-    console.log(str);
-    if (DEBUG) {
-        logger_.unshift(str);
-        if (logger_.length > 20) {
+    console.log(datestr + ": " + str);
+    /* Add to logger if this is not a debug message, or if debugging is enabled */
+    if (level == LogLevel.ERROR || level == LogLevel.INFO || debug_) {
+        logger_.unshift([level, datestr, str]);
+        if (logger_.length > MAXLOGGERLEN) {
             logger_.pop();
         }
         refreshPopup();
     }
 }
 
-function printError(str) {
-    // FIXME: Do something better
-    console.log(str);
-    error_ = true;
-    errortext_ = str;
+/* Display an error, and prevent retries if active is false */
+function error(str, active) {
+    printLog(str, LogLevel.ERROR);
+    enabled_ = active;
+    /* Display an error */
     refreshPopup();
     websocket_.close();
 }

@@ -77,7 +77,7 @@ static int block_read(int fd, char* buffer, size_t size) {
     while (tot < size) {
         n = read(fd, buffer+tot, size-tot);
         if (verbose >= 3)
-            printf("block_read n=%d+%d/%d\n", n, tot, size);
+            printf("block_read n=%d+%d/%zd\n", n, tot, size);
         if (n < 0) return n;
         if (n == 0) return -1; /* EOF */
         tot += n;
@@ -94,7 +94,7 @@ static int block_write(int fd, char* buffer, size_t size) {
     while (tot < size) {
         n = write(fd, buffer+tot, size-tot);
         if (verbose >= 3)
-            printf("block_write n=%d+%d/%d\n", n, tot, size);
+            printf("block_write n=%d+%d/%zd\n", n, tot, size);
         if (n < 0) return n;
         if (n == 0) return -1;
         tot += n;
@@ -489,8 +489,8 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
 
     if (verbose >= 2)
         printf("socket_client_read_frame_header:"
-               " fin=%d; opcode=%d; mask=%d; length=%lld\n",
-               *fin, opcode, mask, length);
+               " fin=%d; opcode=%d; mask=%d; length=%llu\n",
+               *fin, opcode, mask, (long long unsigned int)length);
 
     /* Read extended lenght if necessary */
     int extlensize = 0;
@@ -511,8 +511,8 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
         }
 
         if (verbose >= 3)
-            printf("socket_client_read_frame_header: extended length=%lld\n",
-                   length);
+            printf("socket_client_read_frame_header: extended length=%llu\n",
+                   (long long unsigned int)length);
     }
 
     /* Read masking key if necessary */
@@ -532,8 +532,8 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
 
     if (length > MAXFRAMESIZE) {
         fprintf(stderr,
-                "socket_client_read_frame_header: Frame too big! (%lld>%d)\n",
-                length, MAXFRAMESIZE);
+                "socket_client_read_frame_header: Frame too big! (%llu>%d)\n",
+                (long long unsigned int)length, MAXFRAMESIZE);
         socket_client_close(1009); /* 1009: Message too big */
         return -1;
     }
@@ -561,8 +561,8 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
 
         if (opcode == 8) { /* Connection close. */
             fprintf(stderr, "socket_client_read_frame_header: "
-                    "Connection close from websocket client (length=%lld).\n",
-                    length);
+                    "Connection close from websocket client (length=%llu).\n",
+                    (long long unsigned int)length);
             for (i = 0; i < length; i++) {
                 printf("%08x", buffer[i]);
             }
