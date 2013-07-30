@@ -43,5 +43,5 @@ if [ ! "$STATUS" = "UOK" ]; then
 fi
 
 if [ -n "$switch" ]; then
-    croutoncycle chromium
+    croutoncycle cros
 fi

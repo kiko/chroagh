@@ -3,8 +3,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-USAGE="${0##*/} next|prev|chromium
-Cycles through running graphical chroots. chromium switches back to Chromium OS"
+USAGE="${0##*/} next|prev|cros
+Cycles through running graphical chroots. cros switches back to Chromium OS"
 
 case "$1" in
 [Cc]*) cmd='select 0';;
