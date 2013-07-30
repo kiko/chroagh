@@ -3,18 +3,21 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-PIPEIN='/tmp/croutonwebsocket-in'
-PIPEOUT='/tmp/croutonwebsocket-out'
-PIPELOCK='/tmp/croutonwebsocket-lock'
+PIPEDIR='/tmp/crouton-ext'
+PIPEIN="$PIPEDIR/in"
+PIPEOUT="$PIPEDIR/out"
+PIPELOCK="$PIPEDIR/lock"
 
 # Write a command to croutonwebsocket, and read back response
 websocketcommand() {
+        # Check that $PIPEDIR exists, and make sure that we do not create
+        # $PIPEIN if it does not exist
+        if ! [ -d "$PIPEDIR" -a -p "$PIPEIN" -a -p "$PIPEOUT" ]; then
+            echo "EError $PIPEIN or $PIPEOUT are not pipes."
+            exit 0
+        fi
+
         (
-            # Make sure we do not create $PIPEIN if it does not exist
-            [ -p "$PIPEIN" -a -p "$PIPEOUT" ] || {
-                echo "EError $PIPEIN or $PIPEOUT are not pipes." > "$cliptmp2"
-                exit 0
-            }
             flock 5
             cat > "$PIPEIN"
             cat "$PIPEOUT"

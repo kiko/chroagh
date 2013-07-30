@@ -33,8 +33,9 @@ const int MAXFRAMESIZE = 16*1048576; // 16MiB
 const char* GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 /* Pipe constants */
-const char* PIPEIN_FILENAME = "/tmp/croutonwebsocket-in";
-const char* PIPEOUT_FILENAME = "/tmp/croutonwebsocket-out";
+const char* PIPE_DIR = "/tmp/crouton-ext";
+const char* PIPEIN_FILENAME = "/tmp/crouton-ext/in";
+const char* PIPEOUT_FILENAME = "/tmp/crouton-ext/out";
 const int PIPEOUT_WRITE_TIMEOUT = 3000;
 
 /* 0 - Quiet
@@ -245,7 +246,7 @@ static void pipein_reopen() {
 
     pipein_fd = open(PIPEIN_FILENAME, O_RDONLY | O_NONBLOCK);
     if (pipein_fd < 0) {
-        perror("pipe_init: cannot open pipe in.\n");
+        perror("pipein_reopen: cannot open pipe in.\n");
         exit(1);
     }
 
@@ -253,7 +254,7 @@ static void pipein_reopen() {
      * until EOF */
     int flags = fcntl(pipein_fd, F_GETFL, 0);
     if (flags < 0 || fcntl(pipein_fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-        perror("pipe_init: error in fnctl GETFL/SETFL.\n");
+        perror("pipein_reopen: error in fnctl GETFL/SETFL.\n");
         exit(1);
     }
 
@@ -344,10 +345,11 @@ static void pipein_read() {
 int checkfifo(const char* filename) {
     struct stat fstat;
 
-    /* Check if file exist: if not, create it. */
+    /* Check if file exists: if not, create it. */
     if (access(filename, F_OK) < 0) {
         /* FIFO does not exist: create it */
-        if (mkfifo(filename, S_IRUSR|S_IWUSR) < 0) {
+        if (mkfifo(filename,
+                S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH) < 0) {
             perror("checkfifo: Cannot create FIFO pipe.");
             return -1;
         }
@@ -380,6 +382,27 @@ int checkfifo(const char* filename) {
 
 /* Initialise FIFO pipes. */
 void pipe_init() {
+    struct stat fstat;
+
+    /* Check if directory exists: if not, create it. */
+    if (access(PIPE_DIR, F_OK) < 0) {
+        if (mkdir(PIPE_DIR, S_IRWXU|S_IRWXG|S_IRWXO) < 0) {
+            perror("checkfifo: Cannot create FIFO pipe directory.");
+            return;
+        }
+    } else {
+        if (stat(PIPE_DIR, &fstat) < 0) {
+            perror("pipe_init: Cannot stat FIFO pipe directory.");
+            return;
+        }
+
+        if (!S_ISDIR(fstat.st_mode)) {
+            fprintf(stderr,
+                    "pipe_init: %s exists, but is not a directory.\n", PIPE_DIR);
+            return;
+        }
+    }
+
     if (checkfifo(PIPEIN_FILENAME) ||
         checkfifo(PIPEOUT_FILENAME)) {
         /* checkfifo prints an error already. */
