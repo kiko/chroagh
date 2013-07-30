@@ -6,12 +6,12 @@
 # Synchronizes clipboard between X displays, making use of crouton's WebSocket
 # server and Chromium extension to synchronize the clipboard with Chromium OS
 
-VERBOSE=''
+VERBOSE='1'
 
 PIPEDIR='/tmp/crouton-ext'
-PIPEIN='${PIPEDIR}/in'
-PIPEOUT='${PIPEDIR}/out'
-PIPELOCK='${PIPEDIR}/lock'
+PIPEIN="$PIPEDIR/in"
+PIPEOUT="$PIPEDIR/out"
+PIPELOCK="$PIPEDIR/lock"
 
 # Write a command to croutonwebsocket, and read back response
 websocketcommand() {
@@ -148,7 +148,7 @@ if [ "$xmethod" = 'xephyr' ]; then
         while read line; do
             # Translate window id to display number
             id="${line%%,}"
-            name="`host-x11 xprop -format WM_NAME 8s '\t$0\n'
+            name="`host-x11 xprop -format WM_NAME 8s '\t$0\n' \
                                     -id "$id" WM_NAME | cut -f 2`"
             if [ "$name" = '"aura_root_0"' ]; then
                 display=":0"

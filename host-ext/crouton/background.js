@@ -70,8 +70,11 @@ refreshPopup = function() {
 
             /* Update debug mode according to checkbox state. */
             debugcheck = views[i].document.getElementById("debugcheck");
-            debugcheck.onclick = refreshPopup;
-            debug_ = debugcheck.checked;
+            debugcheck.onclick = function() {
+                debug_ = debugcheck.checked;
+                refreshPopup();
+            }
+            debugcheck.checked = debug_;
 
             /* Update status box */
             views[i].document.getElementById("info").textContent = status_;

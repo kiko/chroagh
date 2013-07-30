@@ -104,7 +104,7 @@ static int popen2(char* cmd, char* input, int inlen, char* output, int outlen) {
     int stdin_fd[2];
     int stdout_fd[2];
 
-    if (pipe(stdin_fd) || pipe(stdout_fd)) {
+    if (pipe(stdin_fd) < 0 || pipe(stdout_fd) < 0) {
         perror("popen2: Failed to create pipe.");
         return -1;
     }
@@ -115,7 +115,7 @@ static int popen2(char* cmd, char* input, int inlen, char* output, int outlen) {
         perror("popen2: Fork error.");
         return -1;
     } else if (pid == 0) {
-        /* Child: connect stdin/out to the pipes */
+        /* Child: connect stdin/out to the pipes, close the unneeded halves */
         close(stdin_fd[1]);
         dup2(stdin_fd[0], STDIN_FILENO);
         close(stdout_fd[0]);
@@ -127,6 +127,7 @@ static int popen2(char* cmd, char* input, int inlen, char* output, int outlen) {
         exit(1);
     }
 
+    /* Parent */
     if (write(stdin_fd[1], input, inlen) != inlen) {
         perror("popen2: Cannot write to pipe!\n");
     }
@@ -136,6 +137,24 @@ static int popen2(char* cmd, char* input, int inlen, char* output, int outlen) {
     close(stdout_fd[0]);
 
     return outlen;
+}
+
+/* Open a pipe in non-blocking mode, then set it back to blocking mode. */
+static int pipe_open_block(const char* path, int oflag) {
+    int fd;
+
+    fd = open(path, oflag | O_NONBLOCK);
+    if (fd < 0)
+        return -1;
+
+    /* Remove non-blocking flag */
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
+        perror("pipe_open_block: error in fnctl GETFL/SETFL.");
+        return -2;
+    }
+
+    return fd;
 }
 
 /**/
@@ -149,37 +168,25 @@ static int pipeout_open() {
     if (verbose >= 2)
         printf("pipeout_open: opening pipe out\n");
 
-    /* Unfortunately, while opening pipes for writing, "open" blocks, instead
-     * of "write", which means we cannot use functions like poll/select, and
-     * we are forced to manually poll.
+    /* Unfortunately, while opening pipes for writing in blocking mode, "open"
+     * blocks. In non-blocking mode, it fails (returns -1), which means that we
+     * cannot open the pipe, then use functions like poll/select like we are
+     * doing for pipein. Therefore, we are forced to poll manually.
      * Using usleep is simpler, and probably better than measuring time elapsed:
      * If the system hangs for a while (like during large I/O writes), this will
      * still wait around PIPEOUT_WRITE_TIMEOUT ms of actual user time, instead
      * of clock time. */
     for (i = 0; i < PIPEOUT_WRITE_TIMEOUT/10; i++) {
-        pipeout_fd = open(PIPEOUT_FILENAME, O_WRONLY | O_NONBLOCK);
+        pipeout_fd = pipe_open_block(PIPEOUT_FILENAME, O_WRONLY);
         if (pipeout_fd > -1)
             break;
+        if (pipeout_fd == -2)
+            return -1;
         usleep(10000);
     }
 
     if (pipeout_fd < 0) {
         fprintf(stderr, "pipeout_open: timeout while opening.\n");
-        pipeout_close();
-        return -1;
-    }
-
-    /* Remove non-blocking flag */
-    int flags = fcntl(pipeout_fd, F_GETFL, 0);
-    if (flags < 0) {
-        perror("pipeout_open: error in fnctl GETFL.");
-        pipeout_close();
-        return -1;
-    }
-
-    if (fcntl(pipeout_fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-        perror("pipeout_open: error in fnctl SETFL.");
-        pipeout_close();
         return -1;
     }
 
@@ -237,17 +244,9 @@ static void pipein_reopen() {
         close(pipein_fd);
     }
 
-    pipein_fd = open(PIPEIN_FILENAME, O_RDONLY | O_NONBLOCK);
+    pipein_fd = pipe_open_block(PIPEIN_FILENAME, O_RDONLY);
     if (pipein_fd < 0) {
         perror("pipein_reopen: cannot open pipe in.\n");
-        exit(1);
-    }
-
-    /* Now that open completed, make sure we block on further operations,
-     * until EOF */
-    int flags = fcntl(pipein_fd, F_GETFL, 0);
-    if (flags < 0 || fcntl(pipein_fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
-        perror("pipein_reopen: error in fnctl GETFL/SETFL.\n");
         exit(1);
     }
 }
@@ -278,6 +277,7 @@ static void pipein_read() {
             break;
         }
 
+        /* Text or cont frame */
         n = socket_client_write_frame(buffer, n, first ? 1 : 0, 0);
         if (n < 0) {
             printf("pipein_read: error writing frame.\n");
@@ -294,7 +294,8 @@ static void pipein_read() {
 
     pipein_reopen();
 
-    n = socket_client_write_frame(buffer, n, 0, 1);
+    /* Empty FIN frame */
+    n = socket_client_write_frame(buffer, 0, 0, 1);
     if (n < 0) {
         printf("pipein_read: error writing frame.\n");
         pipeout_error("EError: socket write error\n");
@@ -303,6 +304,7 @@ static void pipein_read() {
 
     if (verbose >= 2)
         printf("pipein_read: Reading answer from client...\n");
+
     int fin = 0;
     uint32_t maskkey;
 
@@ -310,6 +312,7 @@ static void pipein_read() {
      * cannot be open. */
     pipeout_open();
 
+    /* Read possible fragmented message from WebSocket. */
     while (fin != 1) {
         int len = socket_client_read_frame_header(&fin, &maskkey);
 
@@ -317,6 +320,7 @@ static void pipein_read() {
             break;
         }
 
+        /* Read the whole frame */
         while (len > 0) {
             int rlen = (len > BUFFERSIZE) ? BUFFERSIZE: len;
             if (socket_client_read_frame_data(buffer, rlen, maskkey) < 0) {
@@ -389,13 +393,13 @@ void pipe_init() {
 
         if (!S_ISDIR(fstat.st_mode)) {
             fprintf(stderr,
-                    "pipe_init: %s exists, but is not a directory.\n", PIPE_DIR);
+                   "pipe_init: %s exists, but is not a directory.\n", PIPE_DIR);
             return;
         }
     }
 
-    if (checkfifo(PIPEIN_FILENAME) ||
-        checkfifo(PIPEOUT_FILENAME)) {
+    if (checkfifo(PIPEIN_FILENAME) < 0 ||
+        checkfifo(PIPEOUT_FILENAME) < 0) {
         /* checkfifo prints an error already. */
         exit(1);
     }
@@ -408,17 +412,17 @@ void pipe_init() {
 /* Websocket functions. */
 /**/
 
+/* Close the client socket, possibly sending a close packet. */
 static void socket_client_close(int close_reason) {
     if (close_reason > -1) {
-        char buffer[256];
+        char buffer[32];
         /* RFC does not make it clear if close reason must be an integer
          * or a string. */
         buffer[0] = close_reason >> 8;
         buffer[1] = close_reason;
-        int length = 2+snprintf(buffer+2, 256-2, "croutonwebsocket error\n");
+        int length = 2+snprintf(buffer+2, 32-2, "croutonwebsocket error.");
         socket_client_write_frame(buffer, length, 8, 1);
-        /* Note: We are supposed to read back the answer, but that make thing
-         * a little complicated in most case. */
+        /* FIXME: We are supposed to read back the answer */
     }
 
     close(client_fd);
@@ -426,7 +430,10 @@ static void socket_client_close(int close_reason) {
 }
 
 /* buffer needs to be FRAMEMAXHEADERSIZE+size long,
- * and data must start at buffer[FRAMEMAXHEADERSIZE] only. */
+ * and data must start at buffer[FRAMEMAXHEADERSIZE] only.
+ *  - opcode should generally be 0 (continuation) or 1 (text).
+ *  - fin indicates if the this is the last frame in the message
+ */
 static int socket_client_write_frame(char* buffer, unsigned int size,
                                      unsigned int opcode, int fin) {
     char* pbuffer = buffer+FRAMEMAXHEADERSIZE-2;
@@ -434,7 +441,7 @@ static int socket_client_write_frame(char* buffer, unsigned int size,
     int extlensize = 0;
     int i;
 
-    /* Do we need an extended length field? */
+    /* Test if we need an extended length field. */
     if (payloadlen > 125) {
         if (payloadlen < 65536) {
             payloadlen = 126;
@@ -501,11 +508,11 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
     length = header[1] & 0x7F;
 
     if (verbose >= 2)
-        printf("socket_client_read_frame_header:"
-               " fin=%d; opcode=%d; mask=%d; length=%llu\n",
+        printf("socket_client_read_frame_header: "
+               "fin=%d; opcode=%d; mask=%d; length=%llu\n",
                *fin, opcode, mask, (long long unsigned int)length);
 
-    /* Read extended lenght if necessary */
+    /* Read extended length if necessary */
     int extlensize = 0;
     if (length == 126) extlensize = 2;
     else if (length == 127) extlensize = 8;
@@ -518,6 +525,7 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
             return -1;
         }
 
+        /* Network-order (big-endian) */
         length = 0;
         for (i = 0; i < extlensize; i++) {
             length = length << 8 | extlen[i];
@@ -557,7 +565,9 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
             printf("socket_client_read_frame_header: "
                    "Got a control packet (opcode=%d).\n", opcode);
 
-        if (*fin == 0) { /* Those cannot be fragmented */
+        /* Control packets cannot be fragmented.
+         * Unknown data (opcode 3-7) will result in error anyway. */
+        if (*fin == 0) {
             fprintf(stderr, "socket_client_read_frame_header: "
                     "Fragmented unknown packet\n");
             socket_client_close(1002); /* 1002: Protocol error */
@@ -574,11 +584,7 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
 
         if (opcode == 8) { /* Connection close. */
             fprintf(stderr, "socket_client_read_frame_header: "
-                    "Connection close from websocket client (length=%llu).\n",
-                    (long long unsigned int)length);
-            for (i = 0; i < length; i++) {
-                printf("%08x", buffer[i]);
-            }
+                    "Connection close from websocket client.\n");
             socket_client_close(-1);
             free(buffer);
             return -1;
@@ -588,14 +594,15 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
             /* Do nothing */
         } else { /* Unknown opcode */
             fprintf(stderr, "socket_client_read_frame_header: "
-                    "Fragmented unknown packet\n");
+                    "Unknown packet\n");
             socket_client_close(1002); /* 1002: Protocol error */
+            free(buffer);
             return -1;
         }
 
         free(buffer);
 
-        /* Tell the caller to wait for next packet. */
+        /* Tell the caller to wait for the next packet */
         *fin = 0;
         return 0;
     }
@@ -606,7 +613,7 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
 /* Read frame data from the socket client:
  * - Either reads full buffer size, or fails
  * - Make sure that buffer is at least 4*ceil(size/4) long
- *   (unmasking works by blocks of 4 bytes)
+ *   (unmasking works with blocks of 4 bytes)
  */
 static int socket_client_read_frame_data(char* buffer, unsigned int size,
                                          uint32_t maskkey) {
@@ -636,6 +643,7 @@ static void socket_client_read() {
     int fin = 0;
     uint32_t maskkey;
 
+    /* Read possible fragmented message into buffer */
     while (fin != 1) {
         int curlen = socket_client_read_frame_header(&fin, &maskkey);
 
@@ -653,7 +661,7 @@ static void socket_client_read() {
             return;
         }
 
-        buffer = realloc(buffer, length+curlen+3); /* +3 for maskkey safety */
+        buffer = realloc(buffer, length+curlen+3); /* +3 for unmasking safety */
 
         if (socket_client_read_frame_data(buffer+length, curlen, maskkey) < 0) {
             fprintf(stderr, "socket_client_read: Read error.\n");
@@ -670,6 +678,7 @@ static void socket_client_read() {
         int versionlen = strlen(version);
         char* outbuf = malloc(FRAMEMAXHEADERSIZE+versionlen);
         memcpy(outbuf+FRAMEMAXHEADERSIZE, version, versionlen);
+
         if (socket_client_write_frame(outbuf, versionlen, 1, 1) < 0) {
             fprintf(stderr, "socket_client_read: Write error.\n");
             socket_client_close(-1);
@@ -682,31 +691,32 @@ static void socket_client_read() {
     free(buffer);
 }
 
-/* Sends an error on a new client socket */
+/* Sends an error on a new client socket.
+ * See socket_server_accept for a description of ok. */
 static void socket_server_error(int newclient_fd, int ok) {
     char buffer[BUFFERSIZE];
     int len = 0;
 
     if ((ok & 0x01) &&
             (!(ok & 0x02) || !(ok & 0x7c))) {
-        /* Not /, or clearly not a websocket handshake: 404 */
+        /* Path is not /, or / but clearly not a websocket handshake: 404 */
         len = snprintf(buffer, BUFFERSIZE,
-            "HTTP/1.1 404 Not Found\r\n" \
-            "\r\n" \
-            "<h1>404 Not Found</h1>");
+                       "HTTP/1.1 404 Not Found\r\n"     \
+                       "\r\n"                           \
+                       "<h1>404 Not Found</h1>");
     } else if ((ok & 0x9F) == 0x9F && !(ok & 0x20)) {
-        /* We received something that looks like a websocket
-         * handshake, but wrong version */
+        /* We received something that looks like a websocket handshake,
+         * but wrong version */
         len = snprintf(buffer, BUFFERSIZE,
-            "HTTP/1.1 400 Bad Request\r\n" \
-            "Sec-WebSocket-Version: 13\r\n"
-            "\r\n");
+                       "HTTP/1.1 400 Bad Request\r\n"   \
+                       "Sec-WebSocket-Version: 13\r\n"
+                       "\r\n");
     } else {
         /* Generic answer */
         len = snprintf(buffer, BUFFERSIZE,
-            "HTTP/1.1 400 Bad Request\r\n" \
-            "\r\n" \
-            "<h1>400 Bad Request</h1>");
+                       "HTTP/1.1 400 Bad Request\r\n"   \
+                       "\r\n"                           \
+                       "<h1>400 Bad Request</h1>");
     }
 
     if (verbose >= 3) {
@@ -735,7 +745,7 @@ static void socket_server_accept() {
     }
 
     int first = 1;
-    /* bitmask whether we received everything we need in the header:
+    /* bitmask indicating if we received everything we need in the header:
      *  - 0x01: GET {PATH} HTTP/1.1
      *  - 0x02: {PATH} == / in GET request
      *  - 0x04: Upgrade: websocket
@@ -743,8 +753,8 @@ static void socket_server_accept() {
      *  - 0x10: Sec-WebSocket-Version: {VERSION}
      *  - 0x20: {VERSION} == 13
      *  - 0x40: Sec-WebSocket-Key: 24 bytes
-     *  - 0x80: Host
-     * Therefore a correct final value is 0xFF
+     *  - 0x80: Host: localhost:PORT
+     * Therefore, the correct final value is 0xFF
      */
     int ok = 0x00;
 
@@ -760,9 +770,9 @@ static void socket_server_accept() {
     }
 
     while (1) {
-        /* Start of current line (up to ':' for key-value pairs) */
+        /* Start of current line (until ':' for key-value pairs) */
         char* key = pbuffer;
-        /* Star of value in current line. */
+        /* Star of value in current line (part after ': '). */
         char* value = NULL;
 
         while (1) {
@@ -811,32 +821,39 @@ static void socket_server_accept() {
             break;
         }
 
-        if (first) { /*  / HTTP/1.1 */
+        if (first) { /* Normally GET / HTTP/1.1 */
+            first = 0;
+
             char* tok = strtok(key, " ");
-            if (strcmp(tok, "GET")) {
+            if (!tok || strcmp(tok, "GET")) {
                 fprintf(stderr, "socket_server_accept: "
                         "Invalid HTTP method (%s).\n", tok);
                 continue;
             }
 
-            if (strcmp((tok = strtok(NULL, " ")), "/")) {
+            tok = strtok(NULL, " ");
+            if (!tok || strcmp(tok, "/")) {
                 fprintf(stderr, "socket_server_accept: "
                         "Invalid path (%s).\n", tok);
             } else {
                 ok |= 0x02;
             }
 
-            if (strcmp((tok = strtok(NULL, " ")), "HTTP/1.1")) {
+            tok = strtok(NULL, " ");
+            if (!tok || strcmp(tok, "HTTP/1.1")) {
                 fprintf(stderr, "socket_server_accept: "
                         "Invalid HTTP version (%s).\n", tok);
                 continue;
             }
 
             ok |= 0x01;
-
-            first = 0;
         } else {
-            /* We assume an identical header will not come twice. */
+            if (!value) {
+                fprintf(stderr, "socket_server_accept: "
+                        "Invalid HTTP header (%s).\n", key);
+                socket_server_error(newclient_fd, 0x00);
+                return;
+            }
 
             if (!strcmp(key, "Upgrade") && !strcmp(value, "websocket")) {
                 ok |= 0x04;
@@ -848,19 +865,26 @@ static void socket_server_accept() {
                 if (strcmp(value, "13")) {
                     fprintf(stderr, "socket_server_accept: "
                             "Invalid Sec-WebSocket-Version: %s\n", value);
-                } else {
-                    ok |= 0x20;
+                    continue;
                 }
+                ok |= 0x20;
             } else if (!strcmp(key, "Sec-WebSocket-Key")) {
                 if (strlen(value) != 24) {
                     fprintf(stderr, "socket_server_accept: "
                             "Invalid Sec-WebSocket-Key: '%s'\n", value);
-                } else {
-                    memcpy(websocket_key, value, 24);
-                    ok |= 0x40;
+                    continue;
                 }
+                memcpy(websocket_key, value, 24);
+                ok |= 0x40;
             } else if (!strcmp(key, "Host")) {
-                /* FIXME: We ignore the value (RFC says we should not...) */
+                char strbuf[32];
+                snprintf(strbuf, 32, "localhost:%d", PORT);
+
+                if (strcmp(value, strbuf)) {
+                    fprintf(stderr, "socket_server_accept: "
+                            "Invalid Host field: '%s'\n", value);
+                    continue;
+                }
                 ok |= 0x80;
             }
         }
@@ -912,11 +936,11 @@ static void socket_server_accept() {
     b64[28] = '\0';
 
     int len = snprintf(buffer, BUFFERSIZE,
-        "HTTP/1.1 101 Switching Protocols\r\n" \
-        "Upgrade: websocket\r\n" \
-        "Connection: Upgrade\r\n" \
-        "Sec-WebSocket-Accept: %s\r\n" \
-        "\r\n", b64);
+                       "HTTP/1.1 101 Switching Protocols\r\n"   \
+                       "Upgrade: websocket\r\n"                 \
+                       "Connection: Upgrade\r\n"                \
+                       "Sec-WebSocket-Accept: %s\r\n"           \
+                       "\r\n", b64);
 
     if (len == BUFFERSIZE) {
         fprintf(stderr, "socket_server_accept: "
@@ -1002,13 +1026,13 @@ int main(int argc, char **argv) {
     struct sigaction act;
     char c;
 
-    while ((c = getopt (argc, argv, "v:")) != -1) {
+    while ((c = getopt(argc, argv, "v:")) != (char)-1) {
         switch (c) {
         case 'v':
             verbose = atoi(optarg);
             break;
         case '?':
-            fprintf (stderr, "%s [-v 0-3]\n", argv[0]);
+            fprintf(stderr, "%s [-v 0-3]\n", argv[0]);
             return 1;
         default:
             abort();
@@ -1048,6 +1072,7 @@ int main(int argc, char **argv) {
     pipe_init();
 
     while (!terminate) {
+        /* Make sure fds is up to date. */
         fds[0].fd = server_fd;
         fds[1].fd = pipein_fd;
         fds[2].fd = client_fd;
