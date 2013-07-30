@@ -20,18 +20,28 @@ var websocket_ = null;
 var debug_ = false;
 var enabled_ = true; /* true if we are trying to connect */
 var active_ = false; /* true if we are connected to a server */
+var error_ = false; /* true if there was an error during the last connection */
 
 var status_ = "";
 var logger_ = [];
+
+function updateIcon() {
+    icon = active_ ? "icon-online-38.png" : "icon-offline-38.png";
+
+    if (!enabled_)
+        icon = "icon-disabled-38.png"
+
+    if (error_)
+        icon = "icon-error-38.png"
+
+    chrome.browserAction.setIcon({path: icon});
+}
 
 /* Set the current status string.
  * active is a boolean, true if the WebSocket connection is established. */
 function setStatus(status, active) {
     active_ = active;
-    /* FIXME: Third icon when not enabled/error */
-
-    chrome.browserAction.setIcon(
-        {path: active_ ? "icon-online.png" : "icon-offline.png"});
+    updateIcon();
 
     status_ = status;
     refreshPopup();
@@ -150,6 +160,8 @@ function websocketConnect() {
     console.log("websocketConnect: " + websocket_);
 
     printLog("Opening a web socket", LogLevel.DEBUG);
+    error_ = false;
+    updateIcon();
     setStatus("Connecting...", false);
     websocket_ = new WebSocket(URL);
     websocket_.onopen = websocketOpen;
@@ -284,12 +296,12 @@ function printLog(str, level) {
     }
 }
 
-/* Display an error, and prevent retries if active is false */
-function error(str, active) {
+/* Display an error, and prevent retries if enabled is false */
+function error(str, enabled) {
     printLog(str, LogLevel.ERROR);
-    enabled_ = active;
-    /* Display an error */
-    refreshPopup();
+    enabled_ = enabled;
+    error_ = true;
+    updateIcon();
     websocket_.close();
 }
 
