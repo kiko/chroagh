@@ -49,13 +49,6 @@ static int pipein_fd = -1;
 static int client_fd = -1;
 static int pipeout_fd = -1;
 
-/* Poll array:
- * 0 - server_fd
- * 1 - pipein_fd
- * 2 - client_fd (if any)
- */
-static struct pollfd fds[3];
-
 /* Prototypes */
 static int socket_client_write_frame(char* buffer, unsigned int size,
                                      unsigned int opcode, int fin);
@@ -257,8 +250,6 @@ static void pipein_reopen() {
         perror("pipein_reopen: error in fnctl GETFL/SETFL.\n");
         exit(1);
     }
-
-    fds[1].fd = pipein_fd;
 }
 
 /* Read data from the pipe */
@@ -432,7 +423,6 @@ static void socket_client_close(int close_reason) {
 
     close(client_fd);
     client_fd = -1;
-    fds[2].fd = -1;
 }
 
 /* buffer needs to be FRAMEMAXHEADERSIZE+size long,
@@ -896,7 +886,6 @@ static void socket_server_accept() {
     }
 
     client_fd = newclient_fd;
-    fds[2].fd = newclient_fd;
 
     return;
 
@@ -938,8 +927,6 @@ static void socket_server_init() {
         perror("socket_server_init: Cannot listen on server socket");
         exit(1);
     }
-
-    fds[0].fd = server_fd;
 }
 
 static int terminate = 0;
@@ -950,6 +937,12 @@ static void signal_handler(int sig) {
 
 int main(int argc, char **argv) {
     int n;
+    /* Poll array:
+     * 0 - server_fd
+     * 1 - pipein_fd
+     * 2 - client_fd (if any)
+     */
+    static struct pollfd fds[3];
     int nfds = 3;
     sigset_t sigmask;
     sigset_t sigmask_orig;
@@ -979,11 +972,8 @@ int main(int argc, char **argv) {
 
     /* Prepare pollfd structure. */
     memset(fds, 0, sizeof(fds));
-    fds[0].fd = -1; /* server_fd */
     fds[0].events = POLLIN;
-    fds[1].fd = -1; /* pipein_fd */
     fds[1].events = POLLIN;
-    fds[2].fd = -1; /* client_fd (if any) */
     fds[2].events = POLLIN;
 
     /* Initialise pipe and WebSocket server */
@@ -991,6 +981,10 @@ int main(int argc, char **argv) {
     pipe_init();
 
     while (!terminate) {
+        fds[0].fd = server_fd;
+        fds[1].fd = pipein_fd;
+        fds[2].fd = client_fd;
+
         /* Only handle signals in ppoll: this makes sure we complete answering
          * the current request before bailing out. */
         n = ppoll(fds, nfds, NULL, &sigmask_orig);
