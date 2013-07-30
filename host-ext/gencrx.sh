@@ -13,17 +13,18 @@ if [ ! -x "$CHROMIUM" ]; then
     CHROMIUM="chromium"
 fi
 
+key="crouton.pem"
 ARGS="--pack-extension=crouton"
-if [ -f crouton.pem ]; then
-    ARGS="$ARGS --pack-extension-key=crouton.pem"
+if [ -f "$key" ]; then
+    ARGS="$ARGS --pack-extension-key=$key"
 fi
 
-$CHROMIUM $ARGS || echo "Chromium process error (may not be fatal)" >&2
+$CHROMIUM $ARGS >&2 || echo "Chromium process error (may not be fatal)" >&2
 
 # Check if extension file was generated
 if [ -s "$EXTFILE" ]; then
-    echo "crouton Chromium extension generated successfully"
+    echo "crouton Chromium extension generated successfully."
 else
-    echo "Cannot generate crouton Chromium extension" >&2
+    echo "Cannot generate crouton Chromium extension." >&2
     exit 1
 fi

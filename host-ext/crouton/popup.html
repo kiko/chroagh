@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <title>Getting Started Extension's Popup</title>
+    <title>Crouton extension popup</title>
     <style>
       body {
         min-width: 400px;
@@ -14,27 +14,27 @@
       }
 
       #right {
-        position:fixed;
+        position: fixed;
         top:20px;
         right:5px;
         text-align: right;
       }
 
       #scrolllogger {
-        width:400px;
-        height:200px;
-        overflow-y:auto;
+        width: 400px;
+        height: 200px;
+        overflow-y: auto;
       }
 
       #logger {
         border: 0px;
-        border-spacing:0;
+        border-spacing: 0;
       }
 
       td {
         font-family: "monospace";
-        font-size:12px;
-        vertical-align:top;
+        font-size: 12px;
+        vertical-align: top;
         padding: 2px 15px;
       }
 
@@ -44,13 +44,13 @@
       }
 
       td.time.error {
-        background-color:#FF0000;
-        color:#000000;
+        background-color: #FF0000;
+        color: #000000;
       }
 
-      td.value.debug { color:#808080; }
-      td.value.info { color:#008000; }
-      td.value.error { color:#800000; }
+      td.value.debug { color: #808080; }
+      td.value.info { color: #008000; }
+      td.value.error { color: #800000; }
 
       #debugdiv {
         text-align: right;
@@ -59,7 +59,7 @@
     <script src="popup.js"></script>
   </head>
   <body>
-    <h1>crouton!</h1>
+    <h1>Crouton extension</h1>
     <div id="right"><a href="#" id="enable">.</a></div>
     <div id="info">Loading...</div>
     <br/>

@@ -10,8 +10,7 @@ PIPELOCK="$PIPEDIR/lock"
 
 # Write a command to croutonwebsocket, and read back response
 websocketcommand() {
-        # Check that $PIPEDIR exists, and make sure that we do not create
-        # $PIPEIN if it does not exist
+        # Check that $PIPEDIR and the FIFO pipes exist
         if ! [ -d "$PIPEDIR" -a -p "$PIPEIN" -a -p "$PIPEOUT" ]; then
             echo "EError $PIPEIN or $PIPEOUT are not pipes."
             exit 0

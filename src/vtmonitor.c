@@ -35,9 +35,10 @@ int main(int argc, char **argv) {
     fds[0].events = POLLPRI;
 
     while (1) {
+        /* Wait for events */
         int n = poll(fds, 1, -1);
         if (n <= 0) {
-            perror("poll did not return a positive value.");
+            perror("poll error.");
             return 1;
         }
 

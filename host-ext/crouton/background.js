@@ -13,7 +13,7 @@ LogLevel = {
     DEBUG : 2
 }
 
-var clipboardholder_;
+var clipboardholder_; /* textarea used to hold clipboard content */
 var timeout_ = null;
 var websocket_ = null;
 
@@ -24,21 +24,27 @@ var active_ = false; /* true if we are connected to a server */
 var status_ = "";
 var logger_ = [];
 
+/* Set the current status string.
+ * active is a boolean, true if the WebSocket connection is established. */
 function setStatus(status, active) {
     active_ = active;
-    /* FIXME: Third icon when not enabled */
+    /* FIXME: Third icon when not enabled/error */
 
-    chrome.browserAction.setIcon({path: active_ ? "icon-online.png" : "icon-offline.png"});
+    chrome.browserAction.setIcon(
+        {path: active_ ? "icon-online.png" : "icon-offline.png"});
 
     status_ = status;
     refreshPopup();
 }
 
+/* Refresh the popup page */
 refreshPopup = function() {
     var views = chrome.extension.getViews({type: "popup"});
     for (var i = 0; i < views.length; views++) {
+        /* Make sure page is ready */
         if (document.readyState === "complete") {
-            /* FIXME: There is a little box coming around the link, why? */
+            /* Update enable/disable link. */
+            /* FIXME: Sometimes, there is a little box coming around the link */
             enablelink = views[i].document.getElementById("enable");
             if (enabled_) {
                 enablelink.textContent = "Disable";
@@ -62,11 +68,15 @@ refreshPopup = function() {
                 }
             }
 
+            /* Update debug mode according to checkbox state. */
             debugcheck = views[i].document.getElementById("debugcheck");
             debugcheck.onclick = refreshPopup;
             debug_ = debugcheck.checked;
 
+            /* Update status box */
             views[i].document.getElementById("info").textContent = status_;
+
+            /* Update logger table */
             loggertable = views[i].document.getElementById("logger");
 
             /* FIXME: only update needed rows */
@@ -101,11 +111,11 @@ refreshPopup = function() {
                 cell1.innerHTML = value[1];
                 cell2.innerHTML = value[2];
             }
-            //views[i].document.getElementById("logger").textContent = logger_.join('\n');
         }
     }
 }
 
+/* Start the extension */
 function clipboardStart() {
     printLog("Crouton extension running!", LogLevel.DEBUG);
     setStatus("Started...", false);
@@ -115,9 +125,11 @@ function clipboardStart() {
     websocketConnect();
 }
 
+/* Connect to the server */
 function websocketConnect() {
+    /* Clear timeout if we were called manually. */
     if (timeout_ != null) {
-        clearTimeout(timeout_); /* Clear timeout if we were called manually. */
+        clearTimeout(timeout_);
         timeout_ = null;
     }
 
@@ -142,27 +154,29 @@ function websocketConnect() {
     websocket_.onclose = websocketClose;
 }
 
+/* Connection was established */
 function websocketOpen() {
     printLog("Connection established.", LogLevel.INFO);
     setStatus("Connection established: checking version...", false);
     websocket_.send("V"); /* Request version */
 }
 
+/* Received a message from the server */
 function websocketMessage(evt) {
     var received_msg = evt.data;
     var cmd = received_msg[0];
     var payload = received_msg.substring(1);
 
-    printLog("Message is received (" + cmd + "+" + received_msg + ")", LogLevel.DEBUG);
+    printLog("Message is received (" + received_msg + ")", LogLevel.DEBUG);
 
     /* Only accept version packets until we have checked the version. */
     if (!active_) {
         if (cmd == 'V') { /* Version */
             if (payload != VERSION) {
-                error("Invalid server version " + payload + " != " + VERSION + ".", false);
+                error("Invalid server version " +
+                                payload + " != " + VERSION + ".", false);
             }
             setStatus("Connection established.", true);
-            active_ = true;
             return;
         } else {
             error("Received frame while waiting for version.", false);
@@ -174,28 +188,36 @@ function websocketMessage(evt) {
         clipboardholder_.value = "";
         clipboardholder_.select();
         document.execCommand("Paste");
+
         /* Do not erase identical clipboard content */
         if (clipboardholder_.value != payload) {
             clipboardholder_.value = payload;
             clipboardholder_.select();
-            /* FIXME: Cannot copy empty text, this is a problem with binary data in Linux. */
+            /* FIXME: Cannot copy empty text:
+                      this is a problem with binary data in Linux. */
             document.execCommand("Copy");
         } else {
             printLog("Not erasing content (identical).", LogLevel.DEBUG);
         }
+
         websocket_.send("WOK");
+
         break;
     case 'R': /* Read */
         clipboardholder_.value = "";
         clipboardholder_.select();
         document.execCommand("Paste");
+
         websocket_.send("R" + clipboardholder_.value);
+
         break;
     case 'U': /* Open an URL */
         /* FIXME: Sanity check? We may not want people to open stuff like
          * javascript:alert("hello") */
         chrome.tabs.create({ url: payload });
+
         websocket_.send("UOK");
+
         break;
     case 'P': /* Ping */
         websocket_.send(received_msg);
@@ -209,6 +231,7 @@ function websocketMessage(evt) {
     }
 }
 
+/* Connection was closed (or never established) */
 function websocketClose() {
     if (websocket_ == null) {
         console.log("websocketClose: null!");
@@ -226,6 +249,7 @@ function websocketClose() {
         setStatus("No connection (extension disabled).", false);
         printLog("Connection is closed, extension is disabled: not retrying.", LogLevel.INFO);
     }
+
     websocket_ = null;
 }
 
@@ -237,6 +261,7 @@ function padstr0(i) {
         return s;
 }
 
+/* Add a message in the log. */
 function printLog(str, level) {
     date = new Date;
     datestr = padstr0(date.getHours()) + ":" +
@@ -265,5 +290,5 @@ function error(str, active) {
     websocket_.close();
 }
 
+/* Start the extension as soon as the background page is loaded */
 document.addEventListener('DOMContentLoaded', clipboardStart);
-
