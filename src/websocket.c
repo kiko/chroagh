@@ -42,7 +42,7 @@ const int PIPEOUT_WRITE_TIMEOUT = 3000;
  * 1 - General messages (init, new connections)
  * 2 - 1 + Messages on each new transfers
  * 3 - 2 + Extra information */
-static int verbose = 1;
+static int verbose = 0;
 
 static int server_fd = -1;
 static int pipein_fd = -1;
@@ -682,6 +682,43 @@ static void socket_client_read() {
     free(buffer);
 }
 
+/* Sends an error on a new client socket */
+static void socket_server_error(int newclient_fd, int ok) {
+    char buffer[BUFFERSIZE];
+    int len = 0;
+
+    if ((ok & 0x01) &&
+            (!(ok & 0x02) || !(ok & 0x7c))) {
+        /* Not /, or clearly not a websocket handshake: 404 */
+        len = snprintf(buffer, BUFFERSIZE,
+            "HTTP/1.1 404 Not Found\r\n" \
+            "\r\n" \
+            "<h1>404 Not Found</h1>");
+    } else if ((ok & 0x9F) == 0x9F && !(ok & 0x20)) {
+        /* We received something that looks like a websocket
+         * handshake, but wrong version */
+        len = snprintf(buffer, BUFFERSIZE,
+            "HTTP/1.1 400 Bad Request\r\n" \
+            "Sec-WebSocket-Version: 13\r\n"
+            "\r\n");
+    } else {
+        /* Generic answer */
+        len = snprintf(buffer, BUFFERSIZE,
+            "HTTP/1.1 400 Bad Request\r\n" \
+            "\r\n" \
+            "<h1>400 Bad Request</h1>");
+    }
+
+    if (verbose >= 3) {
+        printf("socket_server_error: answer:\n");
+        puts(buffer);
+    }
+
+    block_write(newclient_fd, buffer, len);
+
+    close(newclient_fd);
+}
+
 /* Accept a new connection on the server socket. */
 static void socket_server_accept() {
     int newclient_fd;
@@ -699,13 +736,15 @@ static void socket_server_accept() {
 
     int first = 1;
     /* bitmask whether we received everything we need in the header:
-     *  - 0x01: Upgrade
-     *  - 0x02: Connection
-     *  - 0x04: Sec-WebSocket-Version
-     *  - 0x08: Sec-WebSocket-Key
-     *  - 0x10: Host
-     *
-     * Therefore a correct final value is 0x1F
+     *  - 0x01: GET {PATH} HTTP/1.1
+     *  - 0x02: {PATH} == / in GET request
+     *  - 0x04: Upgrade: websocket
+     *  - 0x08: Connection: Upgrade
+     *  - 0x10: Sec-WebSocket-Version: {VERSION}
+     *  - 0x20: {VERSION} == 13
+     *  - 0x40: Sec-WebSocket-Key: 24 bytes
+     *  - 0x80: Host
+     * Therefore a correct final value is 0xFF
      */
     int ok = 0x00;
 
@@ -716,7 +755,8 @@ static void socket_server_accept() {
     int n = read(newclient_fd, buffer, BUFFERSIZE);
     if (n <= 0) {
         perror("socket_server_accept: Cannot read from client");
-        goto error;
+        close(newclient_fd);
+        return;
     }
 
     while (1) {
@@ -737,7 +777,8 @@ static void socket_server_accept() {
                 n = read(newclient_fd, pbuffer, BUFFERSIZE-(pbuffer-buffer));
                 if (n <= 0) {
                     perror("socket_server_accept: Cannot read from client");
-                    goto error;
+                    close(newclient_fd);
+                    return;
                 }
             }
 
@@ -770,49 +811,66 @@ static void socket_server_accept() {
             break;
         }
 
-        if (first) {
-            if (strcmp(key, "GET / HTTP/1.1")) {
+        if (first) { /*  / HTTP/1.1 */
+            char* tok = strtok(key, " ");
+            if (strcmp(tok, "GET")) {
                 fprintf(stderr, "socket_server_accept: "
-                        "Invalid header (%s).\n", key);
-                goto error;
+                        "Invalid HTTP method (%s).\n", tok);
+                continue;
             }
+
+            if (strcmp((tok = strtok(NULL, " ")), "/")) {
+                fprintf(stderr, "socket_server_accept: "
+                        "Invalid path (%s).\n", tok);
+            } else {
+                ok |= 0x02;
+            }
+
+            if (strcmp((tok = strtok(NULL, " ")), "HTTP/1.1")) {
+                fprintf(stderr, "socket_server_accept: "
+                        "Invalid HTTP version (%s).\n", tok);
+                continue;
+            }
+
+            ok |= 0x01;
+
             first = 0;
         } else {
             /* We assume an identical header will not come twice. */
 
             if (!strcmp(key, "Upgrade") && !strcmp(value, "websocket")) {
-                ok |= 0x01;
+                ok |= 0x04;
             } else if (!strcmp(key, "Connection") &&
                        !strcmp(value, "Upgrade")) {
-                ok |= 0x02;
+                ok |= 0x08;
             } else if (!strcmp(key, "Sec-WebSocket-Version")) {
-                /* FIXME: There are ways of telling the client we only support
-                 * version 13. */
+                ok |= 0x10;
                 if (strcmp(value, "13")) {
                     fprintf(stderr, "socket_server_accept: "
                             "Invalid Sec-WebSocket-Version: %s\n", value);
-                    goto error;
+                } else {
+                    ok |= 0x20;
                 }
-                ok |= 0x04;
             } else if (!strcmp(key, "Sec-WebSocket-Key")) {
                 if (strlen(value) != 24) {
                     fprintf(stderr, "socket_server_accept: "
                             "Invalid Sec-WebSocket-Key: '%s'\n", value);
-                    goto error;
+                } else {
+                    memcpy(websocket_key, value, 24);
+                    ok |= 0x40;
                 }
-                memcpy(websocket_key, value, 24);
-                ok |= 0x08;
             } else if (!strcmp(key, "Host")) {
                 /* FIXME: We ignore the value (RFC says we should not...) */
-                ok |= 0x10;
+                ok |= 0x80;
             }
         }
     }
 
-    if (ok != 0x1F) {
+    if (ok != 0xFF) {
         fprintf(stderr, "socket_server_accept: "
                 "Some websocket headers missing (%x)\n", ok);
-        goto error;
+        socket_server_error(newclient_fd, ok);
+        return;
     }
 
     if (verbose >= 1)
@@ -863,7 +921,7 @@ static void socket_server_accept() {
     if (len == BUFFERSIZE) {
         fprintf(stderr, "socket_server_accept: "
                 "Response length > %d\n", BUFFERSIZE);
-        goto error;
+        exit(1);
     }
 
     if (verbose >= 3) {
@@ -875,7 +933,8 @@ static void socket_server_accept() {
 
     if (n < 0) {
         perror("socket_server_accept: Cannot write response");
-        goto error;
+        close(newclient_fd);
+        return;
     }
 
     if (verbose >= 2)
@@ -888,12 +947,6 @@ static void socket_server_accept() {
     client_fd = newclient_fd;
 
     return;
-
-error:
-    /* FIXME: RFC says we MUST reply with a HTTP 400 Bad Request, or
-     * a different code depending on the reason... */
-
-    close(newclient_fd);
 }
 
 /* Initialise websocket server */
@@ -947,6 +1000,20 @@ int main(int argc, char **argv) {
     sigset_t sigmask;
     sigset_t sigmask_orig;
     struct sigaction act;
+    char c;
+
+    while ((c = getopt (argc, argv, "v:")) != -1) {
+        switch (c) {
+        case 'v':
+            verbose = atoi(optarg);
+            break;
+        case '?':
+            fprintf (stderr, "%s [-v 0-3]\n", argv[0]);
+            return 1;
+        default:
+            abort();
+        }
+    }
 
     /* signal handler */
     memset(&act, 0, sizeof(act));
