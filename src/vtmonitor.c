@@ -3,9 +3,9 @@
  * found in the LICENSE file.
  *
  * Monitors changes in virtual terminal (VT). This is done by opening
- * /sys/class/tty/tty0/active, and polling for POLLPRI. Then, we seek to the
- * beginning of the file, and read its content, which looks like ttyX, where
- * X is a number.
+ * /sys/class/tty/tty0/active, and waiting for POLLPRI event. Then, we
+ * seek to the beginning of the file, read its content (which looks
+ * like ttyX), and start polling again.
  */
 
 #include <poll.h>

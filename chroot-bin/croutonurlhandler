@@ -23,23 +23,23 @@ websocketcommand() {
         ) 5>"$PIPELOCK"
 }
 
-USAGE="${0##*/} [-n] URL
+USAGE="${0##*/} [-s] URL
 Open an URL in Chromium OS (requires crouton extension).
 If -s is specified, switch to Chromium OS."
+
+switch=''
+if [ "$1" = '-s' ]; then
+    switch='y'
+    shift
+fi
 
 if [ -z "$*" ]; then
     echo "$USAGE" 1>&2; exit 2;
 fi
 
-switch=''
-if [ "$1" = "-s" ]; then
-    switch='y'
-    shift
-fi
-
 STATUS="`echo -n U"$*" | websocketcommand`"
 
-if [ ! "$STATUS" = "UOK" ]; then
+if [ ! "$STATUS" = 'UOK' ]; then
     echo "$STATUS" | tail -c +2
     exit 1
 fi

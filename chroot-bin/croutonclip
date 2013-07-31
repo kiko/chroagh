@@ -48,10 +48,10 @@ copyclip() {
     [ -n "$VERBOSE" ] && echo ">>Current: $current>>"
 
     # Copy clipboard content from the current display
-    if [ "$current" = ":0" ]; then
-        echo -n R | websocketcommand > "$cliptmp2"
+    if [ "$current" = ':0' ]; then
+        echo -n 'R' | websocketcommand > "$cliptmp2"
         STATUS="`head -c 1 "$cliptmp2"`"
-        if [ "$STATUS" = "R" ]; then
+        if [ "$STATUS" = 'R' ]; then
             tail -c +2 "$cliptmp2" > "$cliptmp"
         else
             echo -n "croutonwebsocket error: " >&2
@@ -67,9 +67,9 @@ copyclip() {
     [ -n "$VERBOSE" ] && cat "$cliptmp"
 
     # Paste clipboard content to the next display
-    if [ "$next" = ":0" ]; then
-        STATUS="`(echo -n W; cat "$cliptmp") | websocketcommand`"
-        if [ "$STATUS" != "WOK" ]; then
+    if [ "$next" = ':0' ]; then
+        STATUS="`(echo -n 'W'; cat "$cliptmp") | websocketcommand`"
+        if [ "$STATUS" != 'WOK' ]; then
             # Write failed, skip Chromium OS (do not update $current)
             echo -n "croutonwebsocket error: $STATUS" >&2
             return 0
