@@ -105,6 +105,8 @@ fi
 
 # Run crouton-specific commands before the server exits:
 
+echo "Running exit commands..."
+
 # Find the clipboard synchronization daemon
 croutonclippid=""
 for ccpid in `ps -C croutonclip -opid=`; do
@@ -153,7 +155,7 @@ if [ -n "$croutonclippid" ]; then
 
     # No other display: kill croutonclip
     if [ -z "$other" ]; then
-        kill '$croutonclippid'
+        kill "$croutonclippid"
     fi
 fi
 

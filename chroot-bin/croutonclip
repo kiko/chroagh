@@ -32,11 +32,15 @@ current=''
 cliptmp="`mktemp "croutonclip.XXX"`"
 cliptmp2="`mktemp "croutonclip.XXX"`"
 
-trap "echo trap; rm -f '$cliptmp' '$cliptmp2';
+trap "rm -f '$cliptmp' '$cliptmp2';
         pkill -P $$ 2>&- || true; exit 2" INT TERM HUP 0
 
 copyclip() {
     next="$1"
+
+    if [ -z "$next" ]; then
+        return 0
+    fi
 
     if [ -z "$current" ]; then
         current="$next"
@@ -68,6 +72,8 @@ copyclip() {
 
     [ -n "$VERBOSE" ] && cat "$cliptmp"
 
+    [ -n "$VERBOSE" ] && echo "<<Next: $next<<"
+
     # Paste clipboard content to the next display
     if [ "$next" = ':0' ]; then
         STATUS="`(echo -n 'W'; cat "$cliptmp") | websocketcommand`"
@@ -84,8 +90,6 @@ copyclip() {
             cat "$cliptmp" | DISPLAY="$next" xclip -i -sel clip
         fi
     fi
-
-    [ -n "$VERBOSE" ] && echo "<<Next: $next<<"
 
     current="$next"
 }
