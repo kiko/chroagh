@@ -17,8 +17,11 @@ fi
 ### Append to prepare.sh:
 compile websocket ''
 
+if [ "$XMETHOD" = 'x11' ]; then
+    compile vtmonitor ''
+fi
+
 TIPS="$TIPS
 For the best crouton \"experience\", you need to install crouton extension in
 Chromium OS: Open the file manager, and click on Downloads/crouton.crx .
 "
-

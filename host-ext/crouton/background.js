@@ -6,6 +6,7 @@
 var URL = "ws://localhost:30001/";
 var VERSION = "0";
 var MAXLOGGERLEN = 20;
+var RETRY_TIMEOUT = 5;
 
 LogLevel = {
     ERROR : 0,
@@ -13,17 +14,19 @@ LogLevel = {
     DEBUG : 2
 }
 
+/* Global variables */
 var clipboardholder_; /* textarea used to hold clipboard content */
-var timeout_ = null;
-var websocket_ = null;
+var timeout_ = null; /* Set if a timeout is active */
+var websocket_ = null; /* Active connection */
 
+/* State variables */
 var debug_ = false;
 var enabled_ = true; /* true if we are trying to connect */
 var active_ = false; /* true if we are connected to a server */
 var error_ = false; /* true if there was an error during the last connection */
 
 var status_ = "";
-var logger_ = [];
+var logger_ = []; /* Array of status messages: [LogLevel, time, message] */
 
 function updateIcon() {
     icon = active_ ? "icon-online-38.png" : "icon-offline-38.png";
@@ -254,15 +257,18 @@ function websocketClose() {
     }
 
     if (enabled_) {
-        setStatus("No connection (retrying in 5 seconds)", false);
-        printLog("Connection is closed, trying again in 5 seconds...", LogLevel.INFO);
-        /* Retry in 5 seconds */
+        setStatus("No connection (retrying in " +
+                                    RETRY_TIMEOUT + " seconds)", false);
+        printLog("Connection is closed, trying again in " +
+                            RETRY_TIMEOUT + " seconds...", LogLevel.INFO);
+        /* Retry in RETRY_TIMEOUT seconds */
         if (timeout_ == null) {
-            timeout_ = setTimeout(websocketConnect, 5000);
+            timeout_ = setTimeout(websocketConnect, RETRY_TIMEOUT*1000);
         }
     } else {
         setStatus("No connection (extension disabled).", false);
-        printLog("Connection is closed, extension is disabled: not retrying.", LogLevel.INFO);
+        printLog("Connection is closed, extension is disabled: not retrying.",
+                                                            LogLevel.INFO);
     }
 
     websocket_ = null;
@@ -280,8 +286,8 @@ function padstr0(i) {
 function printLog(str, level) {
     date = new Date;
     datestr = padstr0(date.getHours()) + ":" +
-          padstr0(date.getMinutes()) + ":" +
-          padstr0(date.getSeconds());
+              padstr0(date.getMinutes()) + ":" +
+              padstr0(date.getSeconds());
 
     if (str.length > 80)
         str = str.substring(0, 77) + "...";

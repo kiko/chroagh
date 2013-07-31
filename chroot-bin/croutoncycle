@@ -29,7 +29,6 @@ fi
 # Otherwise, determine current tty and X11 ttys
 curtty="tty`fgconsole`"
 seltty=''
-
 prevtty=''
 for tty in `ps -CX -CXorg -otname= | sort`; do
     if [ "$cmd" = 'next' -a -z "$seltty" ]; then
