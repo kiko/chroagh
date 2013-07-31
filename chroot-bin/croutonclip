@@ -31,7 +31,9 @@ websocketcommand() {
 current=''
 cliptmp="`mktemp "croutonclip.XXX"`"
 cliptmp2="`mktemp "croutonclip.XXX"`"
-trap "rm -f '$cliptmp' '$cliptmp2'" INT HUP 0
+
+trap "echo trap; rm -f '$cliptmp' '$cliptmp2';
+        pkill -P $$ 2>&- || true; exit 2" INT TERM HUP 0
 
 copyclip() {
     next="$1"
@@ -142,7 +144,7 @@ if [ "$xmethod" = 'xephyr' ]; then
             m = $1
         }
     ' | {
-        # Wait for extension to connect (do not fail even if it timeouts)
+        # Wait for extension to connect (do not fail even if it times out)
         waitwebsocket
 
         while read line; do
@@ -165,7 +167,7 @@ elif [ "$xmethod" = 'x11' ]; then
     # croutonvtmonitor outputs the current display right after it is started
 
     croutonvtmonitor | {
-        # Wait for extension to connect (do not fail even if it timeouts)
+        # Wait for extension to connect (do not fail even if it times out)
         waitwebsocket
 
         while read id; do
@@ -188,4 +190,9 @@ elif [ "$xmethod" = 'x11' ]; then
             fi
         done  
     }
+else
+    echo "Invalid xmethod='$xmethod'." >&2
 fi
+
+# Should not happen
+exit 1
