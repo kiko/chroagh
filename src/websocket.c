@@ -414,13 +414,17 @@ void pipe_init() {
 
 /* Close the client socket, possibly sending a close packet. */
 static void socket_client_close(int close_reason) {
+    if (client_fd < 0)
+        return;
+
     if (close_reason > -1) {
-        char buffer[32];
+        char buffer[FRAMEMAXHEADERSIZE+32];
         /* RFC does not make it clear if close reason must be an integer
          * or a string. */
-        buffer[0] = close_reason >> 8;
-        buffer[1] = close_reason;
-        int length = 2+snprintf(buffer+2, 32-2, "croutonwebsocket error.");
+        buffer[FRAMEMAXHEADERSIZE] = close_reason >> 8;
+        buffer[FRAMEMAXHEADERSIZE+1] = close_reason;
+        int length = 2+snprintf(buffer+FRAMEMAXHEADERSIZE+2, 32-2,
+                                "croutonwebsocket error.");
         socket_client_write_frame(buffer, length, 8, 1);
         /* FIXME: We are supposed to read back the answer */
     }
@@ -1050,7 +1054,16 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    /* Ignore terminating signals */
+    /* Ignore SIGPIPE in all cases */
+    sigemptyset(&sigmask);
+    sigaddset(&sigmask, SIGPIPE);
+
+    if (sigprocmask(SIG_BLOCK, &sigmask, NULL) < 0) {
+        perror("main: sigprocmask");
+        return 2;
+    }
+
+    /* Ignore terminating signals except when ppoll is running */
     sigemptyset(&sigmask);
     sigaddset(&sigmask, SIGHUP);
     sigaddset(&sigmask, SIGINT);
