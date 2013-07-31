@@ -29,11 +29,11 @@ websocketcommand() {
 }
 
 current=''
-cliptmp="`mktemp "croutonclip.XXX"`"
-cliptmp2="`mktemp "croutonclip.XXX"`"
+cliptmp="`mktemp "croutonclip.XXX" --tmpdir=/tmp`"
+cliptmp2="`mktemp "croutonclip.XXX" --tmpdir=/tmp`"
 
-trap "rm -f '$cliptmp' '$cliptmp2';
-        pkill -P $$ 2>&- || true; exit 2" INT TERM HUP 0
+TRAP="rm -f '$cliptmp' '$cliptmp2'; exit 2"
+trap "$TRAP" INT TERM HUP 0
 
 copyclip() {
     next="$1"
@@ -137,7 +137,11 @@ if [ "$xmethod" = 'xephyr' ]; then
 
     # Detect window change using MapNotifiy events that do not have the
     # override-redirect flag ("override NO" in xev events)
-    host-x11 xev -root | mawk -W interactive '
+    {
+        host-x11 xev -root &
+        trap "kill $!; $TRAP" INT TERM HUP 0
+        wait
+    } | mawk -W interactive '
         m {
             if ($6 == "NO") {
                 print $4 # Window id
@@ -170,7 +174,11 @@ elif [ "$xmethod" = 'x11' ]; then
     # No need to set $current in this case:
     # croutonvtmonitor outputs the current display right after it is started
 
-    croutonvtmonitor | {
+    {
+        croutonvtmonitor &
+        trap "kill $!; $TRAP" INT TERM HUP 0
+        wait
+    } | {
         # Wait for extension to connect (do not fail even if it times out)
         waitwebsocket
 
@@ -198,5 +206,4 @@ else
     echo "Invalid xmethod='$xmethod'." >&2
 fi
 
-# Should not happen
 exit 1

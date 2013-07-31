@@ -108,24 +108,18 @@ fi
 echo "Running exit commands..."
 
 # Find the clipboard synchronization daemon
-croutonclippid=""
+# When read line is executed in croutonclip, a second process is active,
+# but only one responds to SIGTERM. Make sure we send the signal to all
+# of them
+croutonclippids=""
 for ccpid in `ps -C croutonclip -opid=`; do
     if grep -q "CROUTON=CORE" "/proc/$ccpid/environ"; then
-        croutonclippid="$ccpid"
-        break
+        croutonclippids="$ccpid $croutonclippids"
     fi
 done
 
-if [ -n "$croutonclippid" ]; then
+if [ -n "$croutonclippids" ]; then
     echo "Transfering clipboard content back to Chromium OS..." >&2 
-
-    # Make sure we go back to Chromium OS now, so that we do not lose the
-    # clipboard content of this X server.
-    # Ideally, we should check that this X server is active, in the (very
-    # unlikely) case where we are not currently on Chromium OS (killed by
-    # Ctrl-C in crosh), or on this display (logout from UI), as the user
-    # would get a spurious display change in that case.
-    croutoncycle cros
 
     # Check if we there is another crouton X server running
 
@@ -143,19 +137,16 @@ if [ -n "$croutonclippid" ]; then
         # Make sure process indicated by lock file is running
         if ! [ "$display" = ':0' -o "$display" = "$current" ] && 
                 ps -p "$xpid" >/dev/null 2>&1; then
+            echo "Found other: $display" >&2
             other='y'
             break
         fi
     done
 
-    # Sleep for a while, to make sure the clipboard is transfered
-    # We already switched to Chromium OS, so the user should not even notice
-    # we are sleeping.
-    sleep 2
-
     # No other display: kill croutonclip
     if [ -z "$other" ]; then
-        kill "$croutonclippid"
+        echo "Killing croutonclip ($croutonclippids)..." >&2
+        kill $croutonclippids
     fi
 fi
 
