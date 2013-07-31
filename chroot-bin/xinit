@@ -18,8 +18,17 @@ fi
 
 # Launch the clipboard synchronization daemon
 croutonclip='/usr/local/bin/croutonclip'
-if ! ps -C croutonclip >/dev/null && [ -x "$croutonclip" ]; then
-    "$croutonclip" <&- &
+
+croutoncliprunning=""
+for ccpid in `ps -C croutonclip -opid=`; do
+    if grep -q "CROUTON=CORE" "/proc/$ccpid/environ"; then
+        croutoncliprunning="y"
+        break
+    fi
+done
+
+if [ -x "$croutonclip" -a -z "$croutoncliprunning" ]; then
+    env -i CROUTON="CORE" "$croutonclip" <&- &
 fi
 
 xserverrc='/etc/X11/xinit/xserverrc'
