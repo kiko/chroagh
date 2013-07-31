@@ -22,6 +22,7 @@ if [ "$XMETHOD" = 'x11' ]; then
 fi
 
 TIPS="$TIPS
-For the best crouton \"experience\", you need to install crouton extension in
-Chromium OS: Open the file manager, and click on Downloads/crouton.crx .
+For the best crouton \"experience\" (clipboard synchronization and URL
+handling), you need to install crouton extension in Chromium OS:
+Open the file manager, and click on Downloads/crouton.crx .
 "
