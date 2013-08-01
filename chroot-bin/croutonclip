@@ -118,6 +118,8 @@ waitwebsocket() {
 }
 
 croutonwebsocket &
+TRAP="kill $!; $TRAP"
+trap "$TRAP" INT TERM HUP 0
 
 xmethod="`readlink -f '/etc/X11/xinit/xserverrc'`"
 xmethod="${xmethod##*-}"
