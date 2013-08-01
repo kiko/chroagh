@@ -6,7 +6,7 @@
 # Synchronizes clipboard between X displays, making use of crouton's WebSocket
 # server and Chromium extension to synchronize the clipboard with Chromium OS
 
-VERBOSE='1'
+VERBOSE='0'
 
 PIPEDIR='/tmp/crouton-ext'
 PIPEIN="$PIPEDIR/in"
@@ -118,7 +118,7 @@ waitwebsocket() {
 }
 
 croutonwebsocket &
-TRAP="kill $!; $TRAP"
+TRAP="kill $! 2> /dev/null; $TRAP"
 trap "$TRAP" INT TERM HUP 0
 
 xmethod="`readlink -f '/etc/X11/xinit/xserverrc'`"
