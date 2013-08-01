@@ -97,11 +97,18 @@ fi
 
 # Run the client itself if it is executable, otherwise run it in a shell.
 ret=0
+pid=
 if [ -n "$binary" -o -x "$cmd" ]; then
-    "$cmd" $extraargs "$@" || ret="$?"
+    "$cmd" $extraargs "$@" &
 else
-    /bin/sh "$cmd" $extraargs "$@" || ret="$?"
+    /bin/sh "$cmd" $extraargs "$@" &
 fi
+pid=$!
+
+# Make sure exit commands are run even if we receive a signal
+trap "kill '$pid'" HUP INT
+wait "$pid" || ret=$?
+trap - HUP INT
 
 # Run crouton-specific commands before the server exits:
 
@@ -119,8 +126,6 @@ for ccpid in `ps -C croutonclip -opid=`; do
 done
 
 if [ -n "$croutonclippids" ]; then
-    echo "Transfering clipboard content back to Chromium OS..." >&2 
-
     # Check if we there is another crouton X server running
 
     # Remove possible .0 in DISPLAY (e.g. :0.0)
