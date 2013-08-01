@@ -7,6 +7,8 @@ var URL = "ws://localhost:30001/";
 var VERSION = "1";
 var MAXLOGGERLEN = 20;
 var RETRY_TIMEOUT = 5;
+/* String to copy to the clipboard if it should be empty */
+var DUMMY_EMPTYSTRING = "<crouton-empty-Y3JvdXRvbgo=>";
 
 LogLevel = {
     ERROR : 0,
@@ -24,6 +26,7 @@ var debug_ = false;
 var enabled_ = true; /* true if we are trying to connect */
 var active_ = false; /* true if we are connected to a server */
 var error_ = false; /* true if there was an error during the last connection */
+var dummystr_ = false; /* true if the last string we copied was the dummy string */
 
 var status_ = "";
 var logger_ = []; /* Array of status messages: [LogLevel, time, message] */
@@ -178,6 +181,19 @@ function websocketOpen() {
     setStatus("Connection established: checking version...", false);
 }
 
+function readClipboard() {
+    clipboardholder_.value = "";
+    clipboardholder_.select();
+    document.execCommand("Paste");
+    return clipboardholder_.value;
+}
+
+function writeClipboard(str) {
+    clipboardholder_.value = str;
+    clipboardholder_.select();
+    document.execCommand("Copy");
+}
+
 /* Received a message from the server */
 function websocketMessage(evt) {
     var received_msg = evt.data;
@@ -205,17 +221,22 @@ function websocketMessage(evt) {
 
     switch(cmd) {
     case 'W': /* Write */
-        clipboardholder_.value = "";
-        clipboardholder_.select();
-        document.execCommand("Paste");
+        var clip = readClipboard();
 
         /* Do not erase identical clipboard content */
-        if (clipboardholder_.value != payload) {
-            clipboardholder_.value = payload;
-            clipboardholder_.select();
-            /* FIXME: Cannot copy empty text:
-                      this is a problem with binary data in Linux. */
-            document.execCommand("Copy");
+        if (clip != payload) {
+             /* We cannot write an empty string: Write DUMMY instead */
+            if (payload == "") {
+                writeClipboard(DUMMY_EMPTYSTRING);
+                dummystr_ = true;
+            } else {
+                writeClipboard(payload);
+                dummystr_ = false;
+            }
+        } else if (payload == DUMMY_EMPTYSTRING) {
+            /* Unlikely case where DUMMY string comes from the other side */
+            writeClipboard(payload);
+            dummystr_ = false;
         } else {
             printLog("Not erasing content (identical).", LogLevel.DEBUG);
         }
@@ -224,11 +245,13 @@ function websocketMessage(evt) {
 
         break;
     case 'R': /* Read */
-        clipboardholder_.value = "";
-        clipboardholder_.select();
-        document.execCommand("Paste");
+        var clip = readClipboard();
 
-        websocket_.send("R" + clipboardholder_.value);
+        if (clip == DUMMY_EMPTYSTRING && dummystr_) {
+            websocket_.send("R");
+        } else {
+            websocket_.send("R" + clip);
+        }
 
         break;
     case 'U': /* Open an URL */
@@ -315,6 +338,14 @@ function error(str, enabled) {
     error_ = true;
     updateIcon();
     websocket_.close();
+}
+
+/* On error: disconnect WebSocket, then log errors */
+onerror = function(msg, url, line) {
+    if (websocket_)
+        websocket_.close();
+    error("Uncaught JS error: " + msg, false);
+    return true;
 }
 
 /* Start the extension as soon as the background page is loaded */

@@ -143,6 +143,9 @@ static int popen2(char* cmd, char* input, int inlen, char* output, int outlen) {
 static int pipe_open_block(const char* path, int oflag) {
     int fd;
 
+    if (verbose >= 3)
+        printf("pipe_open_block: %s\n", path);
+
     fd = open(path, oflag | O_NONBLOCK);
     if (fd < 0)
         return -1;
@@ -316,6 +319,9 @@ static void pipein_read() {
     /* Read possibly fragmented message from WebSocket. */
     while (fin != 1) {
         int len = socket_client_read_frame_header(&fin, &maskkey, &retry);
+
+        if (verbose >= 3)
+            printf("pipein_read: len=%d fin=%d retry=%d...\n", len, fin, retry);
 
         if (retry)
             continue;
