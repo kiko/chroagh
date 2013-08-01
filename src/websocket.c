@@ -26,7 +26,7 @@
 const int BUFFERSIZE = 4096;
 
 /* Websocket constants */
-#define VERSION "0"
+#define VERSION "1"
 const int PORT = 30001;
 const int FRAMEMAXHEADERSIZE = 2+8;
 const int MAXFRAMESIZE = 16*1048576; // 16MiB
@@ -52,7 +52,7 @@ static int pipeout_fd = -1;
 /* Prototypes */
 static int socket_client_write_frame(char* buffer, unsigned int size,
                                      unsigned int opcode, int fin);
-static int socket_client_read_frame_header(int* fin, uint32_t* maskkey);
+static int socket_client_read_frame_header(int* fin, uint32_t* maskkey, int* length);
 static int socket_client_read_frame_data(char* buffer, unsigned int size,
                                          uint32_t maskkey);
 static void socket_client_close(int close_reason);
@@ -307,18 +307,21 @@ static void pipein_read() {
 
     int fin = 0;
     uint32_t maskkey;
+    int retry = 0;
 
     /* Ignore return value, so we still read the frame even if pipeout
      * cannot be open. */
     pipeout_open();
 
-    /* Read possible fragmented message from WebSocket. */
+    /* Read possibly fragmented message from WebSocket. */
     while (fin != 1) {
-        int len = socket_client_read_frame_header(&fin, &maskkey);
+        int len = socket_client_read_frame_header(&fin, &maskkey, &retry);
 
-        if (len < 0) {
+        if (retry)
+            continue;
+
+        if (len < 0)
             break;
-        }
 
         /* Read the whole frame */
         while (len > 0) {
@@ -480,16 +483,20 @@ static int socket_client_write_frame(char* buffer, unsigned int size,
 
 /* Read a websocket frame header:
  *  - fin indicates in this is the final frame in a fragemented message
- *  - maskkey is the XOR key used for the message (0 if no key is set).
+ *  - maskkey is the XOR key used for the message
+ *  - retry is set to 1 if we receive a control packet, and the caller
+ *    should call again
  *  - returns the frame length.
  *
  * Data is then read with socket_client_read_data()
  */
-static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
+static int socket_client_read_frame_header(int* fin, uint32_t* maskkey, int* retry) {
     char header[2]; /* Min header length */
     char extlen[8]; /* Extended length */
     int n, i;
     int opcode = -1;
+
+    *retry = 0;
 
     n = block_read(client_fd, header, 2);
     if (n < 0) {
@@ -550,6 +557,9 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
         }
     } else {
         *maskkey = 0;
+        fprintf(stderr, "socket_client_read_frame_header: No mask set.\n");
+        socket_client_close(1002);
+        return -1;
     }
 
     if (verbose >= 3)
@@ -607,6 +617,7 @@ static int socket_client_read_frame_header(int* fin, uint32_t* maskkey) {
         free(buffer);
 
         /* Tell the caller to wait for the next packet */
+        *retry = 1;
         *fin = 0;
         return 0;
     }
@@ -646,10 +657,22 @@ static void socket_client_read() {
     int length = 0;
     int fin = 0;
     uint32_t maskkey;
+    int retry = 0;
+    int data = 0; /* 1 if we received some valid data */
 
     /* Read possible fragmented message into buffer */
     while (fin != 1) {
-        int curlen = socket_client_read_frame_header(&fin, &maskkey);
+        int curlen = socket_client_read_frame_header(&fin, &maskkey, &retry);
+
+        if (retry) {
+            if (!data) {
+                /* We only got a control frame, go back to main loop. We will get
+                 * called again if there is more data waiting. */
+                return;
+            } else {
+                continue;
+            }
+        }
 
         if (curlen < 0) {
             free(buffer);
@@ -677,22 +700,73 @@ static void socket_client_read() {
         length += curlen;
     }
 
-    if (length == 1 && buffer[0] == 'V') {
-        char* version = "V"VERSION;
-        int versionlen = strlen(version);
-        char* outbuf = malloc(FRAMEMAXHEADERSIZE+versionlen);
-        memcpy(outbuf+FRAMEMAXHEADERSIZE, version, versionlen);
-
-        if (socket_client_write_frame(outbuf, versionlen, 1, 1) < 0) {
-            fprintf(stderr, "socket_client_read: Write error.\n");
-            socket_client_close(-1);
-            free(outbuf);
-            free(buffer);
-            return;
-        }
-        free(outbuf);
-    }
+    fprintf(stderr, "Received an unexpected packet from client\n");
+    socket_client_close(-1);
     free(buffer);
+}
+
+/* Send a version packet to the extension, and read VOK reply. */
+static void socket_client_sendversion() {
+    char* version = "V"VERSION;
+    int versionlen = strlen(version);
+    char* outbuf = malloc(FRAMEMAXHEADERSIZE+versionlen);
+    memcpy(outbuf+FRAMEMAXHEADERSIZE, version, versionlen);
+
+    if (socket_client_write_frame(outbuf, versionlen, 1, 1) < 0) {
+        fprintf(stderr, "socket_client_sendversion: Write error.\n");
+        socket_client_close(-1);
+        free(outbuf);
+        return;
+    }
+    free(outbuf);
+
+    /* Read back response */
+    char buffer[32];
+    int buflen = 0;
+    int fin = 0;
+    uint32_t maskkey;
+    int retry = 0;
+
+    /* Read possibly fragmented message from WebSocket. */
+    while (fin != 1) {
+        int len = socket_client_read_frame_header(&fin, &maskkey, &retry);
+
+        if (retry)
+            continue;
+
+        if (len < 0) {
+            break;
+        }
+
+        /* Read the whole frame */
+        while (len > 0) {
+            int rlen = (len > 32-buflen) ? 32-buflen: len;
+
+            if (rlen == 0) {
+                buffer[31] = 0;
+                fprintf(stderr, "socket_client_sendversion: "
+                        "Response too long: (%s).\n", buffer);
+                socket_client_close(1002);
+                return;
+            }
+
+            if (socket_client_read_frame_data(buffer+buflen,
+                                                rlen, maskkey) < 0) {
+                socket_client_close(-1);
+                return;
+            }
+            buflen += rlen;
+            len -= rlen;
+        }
+    }
+
+    if (buflen != 3 || strncmp(buffer, "VOK", 3)) {
+        buffer[buflen == 32 ? 31 : buflen] = 0;
+        fprintf(stderr, "socket_client_sendversion: "
+                        "Invalid response: (%s).\n", buffer);
+        socket_client_close(1002);
+        return;
+    }
 }
 
 /* Sends an error on a new client socket.
@@ -973,6 +1047,8 @@ static void socket_server_accept() {
     }
 
     client_fd = newclient_fd;
+
+    socket_client_sendversion();
 
     return;
 }

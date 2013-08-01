@@ -4,7 +4,7 @@
 
 /* Constants */
 var URL = "ws://localhost:30001/";
-var VERSION = "0";
+var VERSION = "1";
 var MAXLOGGERLEN = 20;
 var RETRY_TIMEOUT = 5;
 
@@ -176,7 +176,6 @@ function websocketConnect() {
 function websocketOpen() {
     printLog("Connection established.", LogLevel.INFO);
     setStatus("Connection established: checking version...", false);
-    websocket_.send("V"); /* Request version */
 }
 
 /* Received a message from the server */
@@ -187,14 +186,17 @@ function websocketMessage(evt) {
 
     printLog("Message is received (" + received_msg + ")", LogLevel.DEBUG);
 
-    /* Only accept version packets until we have checked the version. */
+    /* Only accept version packets until we have received it. */
     if (!active_) {
         if (cmd == 'V') { /* Version */
             if (payload != VERSION) {
+                websocket_.send("EInvalid version (!= " + VERSION + ")");
                 error("Invalid server version " +
                                 payload + " != " + VERSION + ".", false);
             }
+            /* Set active_ to true */
             setStatus("Connection established.", true);
+            websocket_.send("VOK");
             return;
         } else {
             error("Received frame while waiting for version.", false);
@@ -230,11 +232,15 @@ function websocketMessage(evt) {
 
         break;
     case 'U': /* Open an URL */
-        /* FIXME: Sanity check? We may not want people to open stuff like
-         * javascript:alert("hello") */
-        chrome.tabs.create({ url: payload });
-
-        websocket_.send("UOK");
+        /* URL must be absolute: see RFC 3986 for syntax (section 3.1) */
+        if (match = (/^([a-z][a-z0-9+-\.]+):/i).exec(payload)) {
+            /* FIXME: we could blacklist schemes using match[1] here */
+            chrome.tabs.create({ url: payload });
+            websocket_.send("UOK");
+        } else {
+            printLog("Received invalid URL: " + payload, LogLevel.ERROR);
+            websocket_.send("EError: URL must be absolute.");
+        }
 
         break;
     case 'P': /* Ping */
