@@ -140,7 +140,7 @@ if [ -n "$croutonclippids" ]; then
 
         # Ignore :0 (Chromium OS) and current display
         # Make sure process indicated by lock file is running
-        if ! [ "$display" = ':0' -o "$display" = "$current" ] && 
+        if ! [ "$display" = ':0' -o "$display" = "$current" ] &&
                 ps -p "$xpid" >/dev/null 2>&1; then
             echo "Found other: $display" >&2
             other='y'
