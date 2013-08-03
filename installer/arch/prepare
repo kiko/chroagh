@@ -1,0 +1,119 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# This is a distro-specific continuation of the prepare.sh script.
+
+PKGEXT='tar.xz'
+DISTROAKA='arch'
+
+# aurcompile: compile package from AUR. This should not be a permanent
+# solution, as AUR packages cannot be trusted, and may break. Ideally, we would
+# like packages to be pushed to [community].
+# We create the user 'aur' to compile the package, giving it sudo access, so
+# that dependencies and the package itself can be installed automatically.
+aurcompile() {
+    echo "Compiling $1 from AUR..." 1>&2
+    # Make sure base-devel and wget are installed
+    # FIXME: If we want to keep with the crouton spirit, we should try to
+    # remove base-devel later on, but those are big packages, and install will
+    # take a long time if we keep installing/uninstalling those...
+    install base-devel wget
+
+    if ! id aur > /dev/null 2>&1; then
+        useradd aur -r -s /bin/false
+    fi
+
+    SUDOERSFILE="/etc/sudoers.d/99-aur-pacman"
+    echo "aur ALL = NOPASSWD:/usr/bin/pacman" > "$SUDOERSFILE"
+    addtrap "rm -f '$SUDOERSFILE'"
+
+    su aur -s /bin/sh -c "
+        set -e
+        PACKAGE='$1'"'
+        PACKAGE2="${PACKAGE%"${PACKAGE#??}"}"
+        TMPDIR="`mktemp -d --tmpdir=/tmp crouton-aur.XXX`"
+        TRAP="rm -rf '"'"'$TMPDIR'"'"'"
+        trap "$TRAP" INT HUP TERM 0
+        cd "$TMPDIR"
+        wget "https://aur.archlinux.org/packages/$PACKAGE2/$PACKAGE/$PACKAGE.tar.gz"
+        tar vxf "$PACKAGE.tar.gz"
+        cd "$PACKAGE"
+        pkgver=`sed -n '"'"'s/^pkgver=//p'"'"' PKGBUILD`
+        pkgrel=`sed -n '"'"'s/^pkgrel=//p'"'"' PKGBUILD`
+        if pacman -Q "$PACKAGE" | grep "^$PACKAGE $pkgver-$pkgrel\$"; then
+            echo "Package $PACKAGE already up to date ($pkgver-$pkgrel)."
+        else
+            makepkg -A -s -i --noconfirm
+        fi'
+
+    rm -f "$SUDOERSFILE"
+    undotrap
+
+    return 0
+}
+
+# install_dist: see install() in prepare.sh for details.
+# We ignore the second part of the parameters, as Arch only pulls required deps.
+install_dist() {
+    local pkgs='' aurpkgs='' params=''
+    if [ "$1" = '--minimal' ]; then
+        params='--no-install-recommends'
+        shift
+    fi
+    while [ ! "$#" = 0 ]; do
+        if [ "$1" = '--' ]; then
+            shift
+            break
+        fi
+        aurstrip=${1#aur:}
+        if [ "$aurstrip" = "$1" ]; then
+            pkgs="$pkgs $1"
+        else
+            aurpkgs="$aurpkgs $aurstrip"
+        fi
+        shift
+    done
+    if [ -n "$pkgs" ]; then
+        pacman -S --noconfirm --needed $pkgs
+    fi
+    
+    if [ -n "$aurpkgs" ]; then
+        for aurpkg in $aurpkgs; do
+            aurcompile $aurpkg
+        done
+    fi
+}
+
+
+# install_pkg_dist: see install_pkg() in prepare.sh for details.
+install_pkg_dist() {
+    error 1 'ERROR: install_pkg_dist is not supported on Arch'
+}
+
+
+# remove_dist: see remove() in prepare.sh for details.
+remove_dist() {
+    if [ "$#" -gt 0 ]; then
+        pacman -R --unneeded "$@"
+    fi
+}
+
+
+# list_uninstalled_dist: see list_uninstalled() in prepare.sh for details.
+list_uninstalled_dist() {
+    local suffix="$1" pkg
+    if [ -n "$suffix" ]; then
+        error 1 'list_uninstalled_dist: suffix makes no sense on Arch'
+    fi
+    shift
+    for pkg in "$@"; do
+        if ! pacman -Q "$pkg" 2>/dev/null >/dev/null; then
+            echo -n "$pkg "
+        fi
+    done
+}
+
+# Fix the keyboard mode early on (this will be called again after dist-upgrade).
+fixkeyboardmode

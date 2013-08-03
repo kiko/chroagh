@@ -171,7 +171,7 @@ compile() {
     local out="/usr/local/bin/crouton$1" linker="$2"
     echo "Installing dependencies for $out..." 1>&2
     shift 2
-    local pkgs="gcc libc-dev $*"
+    local pkgs="gcc arch=,libc-dev $*"
     local remove="`list_uninstalled '' $pkgs`"
     install --minimal $pkgs
     echo "Compiling $out..." 1>&2
