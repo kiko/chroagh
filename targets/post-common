@@ -32,6 +32,16 @@ echo 'Cleaning up...' 1>&2
 if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
     apt-get -y --purge autoremove
     apt-get clean
+else [ "$DISTRO" = 'arch' ]; then
+    # Archlinux equivalent of autoremove (recursively remove unneeded packages)
+    while true; do
+        remove="`pacman -Qdtq`"
+        if [ -z "$remove" ]; then
+            break
+        fi
+        pacman --noconfirm -R $remove
+    done
+    pacman --noconfirm -Scc
 fi
 
 # Add the primary user
