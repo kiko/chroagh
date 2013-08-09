@@ -32,10 +32,10 @@ echo 'Cleaning up...' 1>&2
 if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
     apt-get -y --purge autoremove
     apt-get clean
-else [ "$DISTRO" = 'arch' ]; then
+elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
     # Archlinux equivalent of autoremove (recursively remove unneeded packages)
     while true; do
-        remove="`pacman -Qdtq`"
+        remove="`pacman -Qdtq || true`"
         if [ -z "$remove" ]; then
             break
         fi
@@ -45,7 +45,17 @@ else [ "$DISTRO" = 'arch' ]; then
 fi
 
 # Add the primary user
-groups='audio,video,sudo,plugdev'
+groups='audio,video,plugdev'
+if [ "${DISTROAKA:-"$DISTRO"}" = 'debian' ]; then
+    groups="$groups,sudo"
+elif [ "${DISTROAKA:-"$DISTRO"}" = 'arch' ]; then
+    groups="$groups,users,wheel"
+    if [ ! -e /etc/sudoers.d/00-wheel ]; then
+        echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/00-wheel
+    fi
+    groupadd -r -f plugdev
+fi
+
 if ! grep -q ':1000:' /etc/passwd; then
     while ! echo "$username" | grep -q '^[a-z][-a-z0-9_]*$'; do
         if [ -n "$username" ]; then
