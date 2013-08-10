@@ -44,6 +44,10 @@ aurcompile() {
         cd "$PACKAGE"
         pkgver=`sed -n '"'"'s/^pkgver=//p'"'"' PKGBUILD`
         pkgrel=`sed -n '"'"'s/^pkgrel=//p'"'"' PKGBUILD`
+        # FIXME: Temporary fix for mawk
+        if [ "$PACKAGE" = "mawk" ]; then
+            sed -e '"'"'s|source=.*|source=("ftp://invisible-island.net/mawk/$pkgname-${pkgver//_/-}.tgz")|'"'"' -i PKGBUILD
+        fi
         if pacman -Q "$PACKAGE" | grep "^$PACKAGE $pkgver-$pkgrel\$"; then
             echo "Package $PACKAGE already up to date ($pkgver-$pkgrel)."
         else
