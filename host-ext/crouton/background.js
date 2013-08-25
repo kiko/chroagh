@@ -4,7 +4,7 @@
 
 /* Constants */
 var URL = "ws://localhost:30001/";
-var VERSION = "1";
+var VERSION = chrome.app.getDetails().version.split('.')[0];
 var MAXLOGGERLEN = 20;
 var RETRY_TIMEOUT = 5;
 /* String to copy to the clipboard if it should be empty */

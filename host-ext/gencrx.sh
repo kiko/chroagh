@@ -61,3 +61,18 @@ printint() {
     printint "`stat -c'%s' "$EXTNAME.sig"`"
     cat "$EXTNAME.pub" "$EXTNAME.sig" "$EXTNAME.zip"
 } > "$EXTNAME.crx"
+
+APPID="`openssl rsa -pubout -outform DER -in "$EXTNAME.pem" 2>/dev/null |
+        sha256sum | head -c32 | tr '0-9a-f' 'a-p'`"
+
+VERSION="`sed -n 's/.*"version".*: "\(.*\)".*/\1/p' crouton/manifest.json`"
+
+# Generate the update manifest
+cat > update.xml <<-END
+<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='$APPID'>
+    <updatecheck codebase='http://localhost:30001/$EXTNAME.crx' version='$VERSION' />
+  </app>
+</gupdate>
+END
