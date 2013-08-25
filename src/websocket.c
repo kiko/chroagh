@@ -51,6 +51,19 @@ const int WS_OPCODE_CLOSE = 0x8;
 const int WS_OPCODE_PING = 0x9;
 const int WS_OPCODE_PONG = 0xA;
 
+/* Files to server over HTTP */
+const char* http_base = "/usr/local/share/croutonwebsocket";
+
+struct http_file {
+    char* filename;
+    char* mime_type;
+};
+
+struct http_file http_files[] = {
+    {.filename = "/update.xml",  .mime_type = "application/xml"},
+    {.filename = "/crouton.crx", .mime_type = "application/x-chrome-extension"}
+};
+
 /* Pipe constants */
 const char* PIPE_DIR = "/tmp/crouton-ext";
 const char* PIPEIN_FILENAME = "/tmp/crouton-ext/in";
@@ -938,6 +951,80 @@ static void socket_server_error(int newclient_fd, int ok) {
     close(newclient_fd);
 }
 
+static void socket_server_serve_http(int newclient_fd, char* request_uri) {
+    char buffer[BUFFERSIZE];
+
+    log(3, "URI=%s", request_uri);
+
+    /* Strip off content after '?' in URI */
+
+    char* tmp = strchr(request_uri, '?');
+    if (tmp)
+        *tmp = '\0';
+
+    log(3, "filename=%s", request_uri);
+
+    int i;
+    for (i = 0; i < sizeof(http_files)/sizeof(struct http_file); i++) {
+        if (strcmp(http_files[i].filename, request_uri) == 0) {
+            char filename[256];
+            snprintf(filename, 256, "%s%s", http_base, http_files[i].filename);
+
+            int fd = open(filename, O_RDONLY);
+
+            if (fd < 0) {
+                syserror("Cannot open %s", filename);
+                break;
+            }
+
+            snprintf(buffer, BUFFERSIZE,
+                     "HTTP/1.1 200 OK\r\n"
+                     "Content-Type: %s\r\n"
+                     "\r\n", http_files[i].mime_type);
+
+            int readn, writen;
+
+            writen = block_write(newclient_fd, buffer, strlen(buffer));
+            if (writen != strlen(buffer)) {
+                syserror("write error");
+                goto done;
+            }
+
+            while (1) {
+                readn = read(fd, buffer, BUFFERSIZE);
+                log(3, "Read %d from fd.", readn);
+                if (readn > 0) {
+                    writen = block_write(newclient_fd, buffer, readn);
+                    if (writen != readn) {
+                        syserror("write error");
+                        break;
+                    }
+                } else if (readn == 0) {
+                    break;
+                } else {
+                    syserror("read error");
+                    break;
+                }
+            }
+
+done:
+            close(fd);
+            close(newclient_fd);
+            return;
+        }
+    }
+
+    strncpy(buffer,
+        "HTTP/1.1 404 Not Found\r\n"
+        "\r\n"
+        "<h1>404 Not Found</h1>", BUFFERSIZE);
+
+    /* Ignore errors */
+    block_write(newclient_fd, buffer, strlen(buffer));
+
+    close(newclient_fd);
+}
+
 /* Read and parse HTTP header.
  * Returns 0 if the header is valid. websocket_key must be at least SECKEY_LEN
  * bytes long, and contains the value of Sec-WebSocket-Key on success.
@@ -947,13 +1034,14 @@ static int socket_server_read_header(int newclient_fd, char* websocket_key) {
     int first = 1;
     char buffer[BUFFERSIZE];
     int ok = 0x00;
+    char* request_uri = NULL;
 
     char* pbuffer = buffer;
     int n = read(newclient_fd, buffer, BUFFERSIZE);
     if (n <= 0) {
         syserror("Cannot read from client.");
         close(newclient_fd);
-        return -1;
+        goto error;
     }
 
     while (1) {
@@ -977,7 +1065,7 @@ static int socket_server_read_header(int newclient_fd, char* websocket_key) {
                 if (n <= 0) {
                     syserror("Cannot read from client.");
                     close(newclient_fd);
-                    return -1;
+                    goto error;
                 }
             }
 
@@ -1017,6 +1105,10 @@ static int socket_server_read_header(int newclient_fd, char* websocket_key) {
             }
 
             tok = strtok(NULL, " ");
+            if (tok) {
+                request_uri = strdup(tok);
+            }
+
             if (!tok || strcmp(tok, "/")) {
                 error("Invalid path (%s).", tok);
             } else {
@@ -1034,7 +1126,7 @@ static int socket_server_read_header(int newclient_fd, char* websocket_key) {
             if (!value) {
                 error("Invalid HTTP header (%s).", key);
                 socket_server_error(newclient_fd, 0x00);
-                return -1;
+                goto error;
             }
 
             if (!strcmp(key, "Upgrade") && !strcmp(value, "websocket")) {
@@ -1070,12 +1162,23 @@ static int socket_server_read_header(int newclient_fd, char* websocket_key) {
     }
 
     if (ok != OK_ALL) {
+        /* We receive a valid HTTP request, try to answer it. */
+        if ((ok & OK_GET) && (ok & OK_HOST)) {
+            socket_server_serve_http(newclient_fd, request_uri);
+            goto error;
+        }
+
         error("Some WebSocket headers missing (%x).", ~ok & OK_ALL);
         socket_server_error(newclient_fd, ok);
-        return -1;
+        goto error;
     }
 
+    free(request_uri);
     return 0;
+
+error:
+    free(request_uri);
+    return -1;
 }
 
 /* Accept a new client connection on the server socket. */
