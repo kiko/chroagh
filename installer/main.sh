@@ -156,9 +156,7 @@ if [ "$RELEASE" = 'list' -o "$RELEASE" = 'help' ]; then
         DISTRO="${DISTRODIR##*/}"
         echo "Recognized $DISTRO releases:" 1>&2
         echo -n '   ' 1>&2
-        while read RELEASE; do
-            echo -n " $RELEASE" 1>&2
-        done < "$DISTRODIR/releases"
+        tr '\n' ' ' < "$DISTRODIR/releases" 1>&2
         echo 1>&2
     done
     exit 2
@@ -431,10 +429,11 @@ fi
 
 # Create the setup script inside the chroot
 echo 'Preparing chroot environment...' 1>&2
-VAREXPAND="s #ARCH $ARCH ;s #MIRROR $MIRROR ;"
-VAREXPAND="${VAREXPAND}s #DISTRO $DISTRO ;s #RELEASE $RELEASE ;"
-VAREXPAND="${VAREXPAND}s #PROXY $PROXY ;s #VERSION $VERSION ;"
-VAREXPAND="${VAREXPAND}s/#SETOPTIONS/$SETOPTIONS/;"
+VAREXPAND="s #ARCH# $ARCH ;s #MIRROR# $MIRROR ;"
+VAREXPAND="${VAREXPAND}s #DISTRO# $DISTRO ;s #RELEASE# $RELEASE ;"
+VAREXPAND="${VAREXPAND}s #PROXY# $PROXY ;s #VERSION# $VERSION ;"
+VAREXPAND="${VAREXPAND}s/#SETOPTIONS#/$SETOPTIONS/;"
+VAREXPAND="${VAREXPAND}s/#DISTRORELEASES#/`tr '\n' ' ' < "$DISTRODIR/releases"`/;"
 installscript "$INSTALLERDIR/prepare.sh" "$CHROOT/prepare.sh" "$VAREXPAND"
 # Append the distro-specific prepare.sh
 cat "$DISTRODIR/prepare" >> "$CHROOT/prepare.sh"

@@ -3,15 +3,17 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# Usage: prepare.sh arch mirror distro release proxy version setoptions
-ARCH="${1:-"#ARCH"}"
+ARCH='#ARCH#'
 # MIRROR may contain variables (e.g., $repo): make sure we do not expand it
-MIRROR=${2:-'#MIRROR'}
-DISTRO="${3:-"#DISTRO"}"
-RELEASE="${4:-"#RELEASE"}"
-PROXY="${5:-"#PROXY"}"
-VERSION="${6:-"#VERSION"}"
-SETOPTIONS="${7:-"#SETOPTIONS"}"
+MIRROR='#MIRROR#'
+DISTRO='#DISTRO#'
+RELEASE='#RELEASE#'
+PROXY='#PROXY#'
+VERSION='#VERSION#'
+# Extra shell options (e.g. -x, -v)
+SETOPTIONS='#SETOPTIONS#'
+# List of releases in the current distribution, in order of release date
+DISTRORELEASES='#DISTRORELEASES#'
 
 # Additional set options: -x or -v can be added for debugging (-e is always on)
 if [ -n "$SETOPTIONS" ]; then
@@ -191,6 +193,48 @@ compile() {
     return $ret
 }
 
+
+# compare_release: Compare the current release with a reference, to enable
+# special handling for specific releases (e.g. fetch a package manually on an
+# older release).
+# Each argument is in the format: distro:<op>release, where <op> is a
+# comparison operator (>, >=, =, <=, <). Each distro can only be specified
+# once, and the function returns false if the current distro is not specified.
+# For example, match_release "ubuntu:<precise" "debian:=lenny" returns:
+#  - true on all releases of Ubuntu before (but not including) precise
+#  - true on Debian wheezy
+#  - false on any other release of Debian, Ubuntu
+#  - false on other distributions
+# This relies on the fact that installer/distro/releases is ordered by release
+# date.
+compare_release() {
+    for arg in $*; do
+        if [ "$DISTRO" = "${arg%:*}" ]; then
+            local comp="${arg#*:}"
+            # Separate comparison operator (up to 2 characters)
+            local match="${comp#[<=>]}"
+            match="${match#[<=>]}"
+            local op="${comp%$match}"
+
+            if [ $op = "=" ]; then op='=='; fi
+
+            # Compare version (invert test: shell "true" is 0)
+            local cmp="`echo -n "$DISTRORELEASES" | awk '
+                BEGIN{ RS=" " }
+                $0 == "'"$RELEASE"'" { m1=NR } $0 == "'"$match"'" { m2=NR }
+                END { if (m1 && m2) print !(m1 '"$op"' m2) }'`"
+
+            if [ -z "$cmp" ]; then
+                echo "Invalid release comparison ($1)." 2>&1
+                exit 1
+            fi
+
+            return $cmp
+        fi
+    done
+    # Return false if no distribution matches
+    return 1
+}
 
 # The rest is dictated first by the distro-specific prepare.sh, and then by the
 # selected targets.
