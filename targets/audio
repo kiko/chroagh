@@ -11,10 +11,11 @@ CHROOTETC='pulseaudio-default.pa'
 
 # Install CRAS dependencies
 
-install --minimal wget alsa-utils dbus libasound2 libspeexdsp1
+install --minimal wget alsa-utils dbus \
+    arch=alsa-lib,libasound2 arch=speex,libspeexdsp1
 
-install --minimal --asdeps gcc libc-dev pkg-config \
-    libdbus-1-dev libasound2-dev libspeexdsp-dev
+install --minimal --asdeps gcc arch=,libc-dev pkg-config \
+    arch=,libdbus-1-dev arch=,libasound2-dev arch=,libspeexdsp-dev
 
 # SBC is not available in older Debian/Ubuntu: fetch it manually
 if [ "$RELEASE" = 'precise' -o "$RELEASE" = 'quantal' -o \
@@ -23,8 +24,8 @@ if [ "$RELEASE" = 'precise' -o "$RELEASE" = 'quantal' -o \
     install_mirror_package 'libsbc-dev' 'pool/main/s/sbc' '1\.1.*'
     apt-mark auto libsbc-dev
 else
-    install --minimal libsbc1
-    install --minimal --asdeps libsbc-dev
+    install --minimal arch=sbc,libsbc1
+    install --minimal --asdeps arch=,libsbc-dev
 fi
 
 # Build CRAS from source
