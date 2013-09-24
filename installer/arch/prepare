@@ -18,10 +18,8 @@ aurcompile() {
     shift
     echo "Compiling $package from AUR..." 1>&2
     # Make sure base-devel and wget are installed
-    # FIXME: If we want to keep with the crouton spirit, we should try to
-    # remove base-devel later on, but those are big packages, and install will
-    # take a long time if we keep installing/uninstalling those...
-    install base-devel wget
+    install --asdeps base-devel
+    install wget
 
     if ! id aur > /dev/null 2>&1; then
         useradd aur -r -s /bin/false
