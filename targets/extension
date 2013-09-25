@@ -1,0 +1,28 @@
+#!/bin/sh -e
+# Copyright (c) 2013 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+REQUIRES='x11'
+DESCRIPTION='Clipboard synchronization and URL handling with Chromium OS.'
+CHROOTBIN='croutonclip croutonurlhandler'
+
+if [ ! "$TARGETS" = 'help' ] && [ ! "$TARGETS" = 'check' ]; then
+  cp "${SCRIPTDIR:-..}/host-ext/crouton.crx" /home/chronos/user/Downloads/
+fi
+
+. "${TARGETSDIR:="$PWD"}/common"
+
+### Append to prepare.sh:
+install xclip
+
+compile websocket ''
+
+# XMETHOD is defined in x11 (or xephyr), which this package depends on
+if [ "$XMETHOD" = 'x11' ]; then
+    compile vtmonitor ''
+fi
+
+TIPS="$TIPS
+You must install the Chromium OS extension for integration with crouton to work:
+Open the file manager and double-click on Downloads/crouton.crx
+"
